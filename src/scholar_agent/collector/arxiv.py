@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -32,36 +33,81 @@ def normalize_arxiv_id(arxiv_input: str) -> str:
     return match.group(1)
 
 
-def fetch_arxiv_metadata(arxiv_input: str) -> PaperMetadata:
-    arxiv_id = normalize_arxiv_id(arxiv_input)
-    url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
-    resp = httpx.get(url, timeout=30.0, follow_redirects=True)
+def _fetch_hf_paper_metadata(arxiv_id: str) -> PaperMetadata:
+    headers = {"User-Agent": "ScholarAgent/0.1 (research platform)"}
+    resp = httpx.get(
+        f"https://huggingface.co/api/papers/{arxiv_id}",
+        headers=headers,
+        timeout=30.0,
+        follow_redirects=True,
+    )
     resp.raise_for_status()
-
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
-    root = ET.fromstring(resp.text)
-    entry = root.find("atom:entry", ns)
-    if entry is None:
-        raise RuntimeError(f"No arXiv entry found for {arxiv_id}")
-
-    title = " ".join((entry.findtext("atom:title", "", ns) or "").split())
-    abstract = " ".join((entry.findtext("atom:summary", "", ns) or "").split())
-    published = (entry.findtext("atom:published", "", ns) or "")[:10]
+    data = resp.json()
     authors = [
-        (a.findtext("atom:name", "", ns) or "").strip()
-        for a in entry.findall("atom:author", ns)
+        a.get("name", "").strip()
+        for a in data.get("authors", [])
+        if isinstance(a, dict) and a.get("name")
     ]
-
     return PaperMetadata(
         paper_id=f"arxiv_{arxiv_id}",
         canonical_id=f"arxiv:{arxiv_id}",
         source="arxiv",
-        title=title,
-        authors=[a for a in authors if a],
-        abstract=abstract,
-        published_at=published,
+        title=" ".join((data.get("title") or "").split()),
+        authors=authors,
+        abstract=" ".join((data.get("summary") or "").split()),
+        published_at=(data.get("publishedAt") or "")[:10],
         pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
     )
+
+
+def fetch_arxiv_metadata(arxiv_input: str) -> PaperMetadata:
+    arxiv_id = normalize_arxiv_id(arxiv_input)
+    url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+    headers = {"User-Agent": "ScholarAgent/0.1 (research platform)"}
+
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            resp = httpx.get(url, headers=headers, timeout=30.0, follow_redirects=True)
+            if resp.status_code == 429 and attempt == 0:
+                time.sleep(2.0)
+                continue
+            resp.raise_for_status()
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            root = ET.fromstring(resp.text)
+            entry = root.find("atom:entry", ns)
+            if entry is None:
+                raise RuntimeError(f"No arXiv entry found for {arxiv_id}")
+
+            title = " ".join((entry.findtext("atom:title", "", ns) or "").split())
+            abstract = " ".join((entry.findtext("atom:summary", "", ns) or "").split())
+            published = (entry.findtext("atom:published", "", ns) or "")[:10]
+            authors = [
+                (a.findtext("atom:name", "", ns) or "").strip()
+                for a in entry.findall("atom:author", ns)
+            ]
+            return PaperMetadata(
+                paper_id=f"arxiv_{arxiv_id}",
+                canonical_id=f"arxiv:{arxiv_id}",
+                source="arxiv",
+                title=title,
+                authors=[a for a in authors if a],
+                abstract=abstract,
+                published_at=published,
+                pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+            )
+        except Exception as exc:
+            last_err = exc
+            if attempt == 0:
+                time.sleep(1.5)
+
+    # Fallback to Hugging Face Papers API when arXiv Atom API rate-limits (429)
+    try:
+        return _fetch_hf_paper_metadata(arxiv_id)
+    except Exception:
+        if last_err is not None:
+            raise last_err
+        raise
 
 
 def download_pdf(pdf_url: str, dest_path: Path) -> str:
