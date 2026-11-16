@@ -82,6 +82,9 @@ import com.jjlee.mynote.data.db.NoteDao
 import com.jjlee.mynote.drive.DriveApiService
 import com.jjlee.mynote.drive.DriveAuthManager
 import com.jjlee.mynote.drive.DriveItem
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -90,6 +93,13 @@ private enum class FolderPickTarget {
     SOURCE,
     EXPORT
 }
+
+private data class DriveBrowserEntry(
+    val item: DriveItem,
+    val isPaperBundle: Boolean = false,
+    val highlightedPdf: DriveItem? = null,
+    val originalPdf: DriveItem? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +125,7 @@ fun DriveBrowserScreen(
 
     var isLoading by remember { mutableStateOf(false) }
 
-    var sourceDrivePdfs by remember { mutableStateOf<List<DriveItem>>(emptyList()) }
+    var sourceDriveEntries by remember { mutableStateOf<List<DriveBrowserEntry>>(emptyList()) }
     var driveFolderStack by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
 
     var folderPickTarget by remember { mutableStateOf<FolderPickTarget?>(null) }
@@ -134,10 +144,35 @@ fun DriveBrowserScreen(
                 driveApiService.listChildrenInFolder(token, it)
             } ?: emptyList()
             val hasHighlighted = rawChildren.any { it.name.equals("highlighted.pdf", ignoreCase = true) }
-            sourceDrivePdfs = if (hasHighlighted) {
+            val filtered = if (hasHighlighted) {
                 rawChildren.filterNot { it.name.equals("original.pdf", ignoreCase = true) }
             } else {
                 rawChildren
+            }
+            sourceDriveEntries = coroutineScope {
+                filtered.map { child ->
+                    async {
+                        if (child.mimeType == "application/vnd.google-apps.folder") {
+                            val pdfs = runCatching {
+                                driveApiService.listPdfsInFolder(token, child.id)
+                            }.getOrDefault(emptyList())
+                            val hl = pdfs.firstOrNull { it.name.equals("highlighted.pdf", ignoreCase = true) }
+                            val orig = pdfs.firstOrNull { it.name.equals("original.pdf", ignoreCase = true) }
+                            if (hl != null || orig != null) {
+                                DriveBrowserEntry(
+                                    item = child,
+                                    isPaperBundle = true,
+                                    highlightedPdf = hl,
+                                    originalPdf = orig
+                                )
+                            } else {
+                                DriveBrowserEntry(item = child)
+                            }
+                        } else {
+                            DriveBrowserEntry(item = child)
+                        }
+                    }
+                }.awaitAll()
             }
         }.onFailure { e ->
             Toast.makeText(context, "Drive 조회 오류: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -312,7 +347,7 @@ fun DriveBrowserScreen(
                         }
 
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            if (sourceDrivePdfs.isNotEmpty() || driveFolderStack.isNotEmpty()) {
+                            if (sourceDriveEntries.isNotEmpty() || driveFolderStack.isNotEmpty()) {
                                 item {
                                     val pathLabel = if (driveFolderStack.isEmpty()) {
                                         "Google Drive 논문 / 문서"
@@ -337,8 +372,63 @@ fun DriveBrowserScreen(
                                         )
                                     }
                                 }
-                                items(sourceDrivePdfs, key = { it.id }) { item ->
-                                    if (item.mimeType == "application/vnd.google-apps.folder") {
+                                items(sourceDriveEntries, key = { it.item.id }) { entry ->
+                                    val item = entry.item
+                                    if (entry.isPaperBundle) {
+                                        val primaryPdf = entry.highlightedPdf ?: entry.originalPdf!!
+                                        val originalTarget = entry.originalPdf ?: primaryPdf
+                                        ListItem(
+                                            headlineContent = { Text(item.name) },
+                                            supportingContent = {
+                                                Text(
+                                                    if (entry.highlightedPdf != null) {
+                                                        "탭하여 하이라이트+필기 열기 • ${primaryPdf.sizeBytes / 1024} KB"
+                                                    } else {
+                                                        "탭하여 열기 • ${primaryPdf.sizeBytes / 1024} KB"
+                                                    }
+                                                )
+                                            },
+                                            leadingContent = { Icon(Icons.Default.Description, null) },
+                                            trailingContent = {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            openDrivePdf(
+                                                                context,
+                                                                originalTarget.copy(name = "${item.name} (원본).pdf"),
+                                                                folderSettings,
+                                                                noteDao,
+                                                                driveApiService,
+                                                                showStrokes = false,
+                                                                onOpenDocument = onOpenDocument
+                                                            )
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Visibility,
+                                                        contentDescription = "원본 보기",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("원본 보기")
+                                                }
+                                            },
+                                            modifier = Modifier.clickable {
+                                                scope.launch {
+                                                    openDrivePdf(
+                                                        context,
+                                                        primaryPdf.copy(name = "${item.name}.pdf"),
+                                                        folderSettings,
+                                                        noteDao,
+                                                        driveApiService,
+                                                        showStrokes = true,
+                                                        onOpenDocument = onOpenDocument
+                                                    )
+                                                }
+                                            }
+                                        )
+                                    } else if (item.mimeType == "application/vnd.google-apps.folder") {
                                         ListItem(
                                             headlineContent = { Text(item.name) },
                                             supportingContent = { Text("폴더 열기") },
@@ -435,7 +525,7 @@ fun DriveBrowserScreen(
                                         }
                                     )
                                 }
-                            } else if (sourceDrivePdfs.isEmpty() && !isLoading) {
+                            } else if (sourceDriveEntries.isEmpty() && !isLoading) {
                                 item {
                                     Box(
                                         modifier = Modifier
