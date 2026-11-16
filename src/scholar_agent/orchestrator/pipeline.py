@@ -97,6 +97,7 @@ def run_paper_pipeline(
     *,
     out_base_dir: Path | None = None,
     force: bool = False,
+    include_en: bool = False,
 ) -> dict[str, Any]:
     root = get_project_root()
     config = load_agents_config()
@@ -284,7 +285,7 @@ def run_paper_pipeline(
         )
 
     en_path = work_dir / "summary" / "summary.en.md"
-    if not en_path.exists() or force:
+    if include_en and (not en_path.exists() or force):
         en_prompt = (
             f"You are the Report Synthesis Agent.\n"
             f"Write a concise, high-precision English research report in Markdown for '{meta.title}' "
@@ -304,18 +305,21 @@ def run_paper_pipeline(
 
     store.update_paper_status(meta.paper_id, "completed")
     matched_count = sum(1 for h in enriched_highlights if h["matched"])
+    artifacts = {
+        "original_pdf": str(pdf_path),
+        "highlighted_pdf": str(out_pdf),
+        "highlights_json": str(out_hl_json),
+        "summary_ko": str(ko_path),
+    }
+    if include_en and en_path.exists():
+        artifacts["summary_en"] = str(en_path)
+
     summary_result = {
         "status": "completed",
         "paper_id": meta.paper_id,
         "title": meta.title,
         "work_dir": str(work_dir),
-        "artifacts": {
-            "original_pdf": str(pdf_path),
-            "highlighted_pdf": str(out_pdf),
-            "highlights_json": str(out_hl_json),
-            "summary_ko": str(ko_path),
-            "summary_en": str(en_path),
-        },
+        "artifacts": artifacts,
         "metrics": {
             "pages": prep["page_count"],
             "highlights_total": len(enriched_highlights),

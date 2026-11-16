@@ -5,7 +5,7 @@
     "category": "background",
     "importance": 4,
     "quote": "However, fine-tuning can be inefficient as the weights need to be updated each time knowledge is updated.",
-    "reason": "Explains why supervised fine-tuning is unsuitable for dynamic external knowledge augmentation.",
+    "reason": "Explains the key limitation of supervised fine-tuning for external knowledge updates that motivates non-parametric approaches like KBLAM.",
     "matched": true,
     "rects": [
       [
@@ -26,9 +26,9 @@
     "block_id": "p2_b31",
     "page": 2,
     "category": "background",
-    "importance": 5,
+    "importance": 4,
     "quote": "However, the time and memory complexities of in-context learning are quadratic with the context length.",
-    "reason": "Identifies the core scalability bottleneck of in-context learning that KBLAM addresses.",
+    "reason": "Identifies the quadratic scaling bottleneck of in-context learning that KBLAM directly addresses.",
     "matched": true,
     "rects": [
       [
@@ -50,68 +50,74 @@
     "page": 1,
     "category": "contribution",
     "importance": 5,
-    "quote": "Unlike Retrieval-Augmented Generation, KBLAM eliminates external retrieval modules, and unlike in-context learning, its computational overhead scales linearly with KB size rather than quadratically.",
-    "reason": "Summarizes the two primary advantages of KBLAM over RAG and in-context learning.",
+    "quote": "In this paper, we propose Knowledge Base augmented Language Model (KBLAM), a new method for augmenting Large Language Models (LLMs) with external knowledge.",
+    "reason": "Core paper contribution statement introducing KBLAM.",
     "matched": true,
     "rects": [
       [
-        193.72,
-        339.82,
-        377.08,
-        349.68
+        143.87,
+        274.07,
+        448.16,
+        283.93
       ],
       [
-        377.57,
-        341.32,
-        383.21,
-        349.21
+        448.65,
+        275.56,
+        454.29,
+        283.45
       ],
       [
-        383.7,
-        339.82,
+        454.77,
+        274.07,
+        469.38,
+        283.93
+      ],
+      [
+        143.87,
+        284.87,
         468.13,
-        349.68
+        294.94
       ],
       [
         143.87,
-        350.78,
-        468.14,
-        360.64
-      ],
-      [
-        143.87,
-        361.73,
-        328.23,
-        371.6
+        295.98,
+        188.9,
+        305.85
       ]
     ]
   },
   {
-    "block_id": "p2_b34",
-    "page": 2,
+    "block_id": "p1_b8",
+    "page": 1,
     "category": "contribution",
-    "importance": 4,
-    "quote": "Additionally, the independence allows us to update/remove/add a triple by only modifying its corresponding single knowledge token without any further changes, which is not achievable in, e.g. standard KV cache mechanism.",
-    "reason": "Highlights dynamic KB updates without retraining or recomputing the full KV cache.",
+    "importance": 5,
+    "quote": "Our approach enables integrating a large KB of more than 10K triples into an 8B pre-trained LLM of only 8K context window on one single A100 80GB GPU and allows for dynamic updates without model fine-tuning or retraining.",
+    "reason": "Quantifies KBLAM's practical scalability and dynamic update capability on a single GPU.",
     "matched": true,
     "rects": [
       [
-        246.18,
-        639.54,
-        504.0,
-        649.6
+        331.32,
+        361.73,
+        468.13,
+        371.6
       ],
       [
-        108.0,
-        650.5,
-        505.25,
-        660.56
+        143.87,
+        372.68,
+        468.14,
+        382.56
       ],
       [
-        107.64,
-        661.46,
-        372.65,
-        671.52
+        143.51,
+        383.55,
+        468.13,
+        393.55
+      ],
+      [
+        143.87,
+        394.61,
+        267.22,
+        404.48
       ]
     ]
   },
@@ -121,7 +127,7 @@
     "category": "contribution",
     "importance": 4,
     "quote": "KBLAM can learn to refuse to provide an answer if the information required to answer the question is not present in the KB, improving the reliability of the model and reducing hallucinations.",
-    "reason": "Highlights KBLAM's ability to abstain on unanswerable queries to reduce hallucinations.",
+    "reason": "Highlights KBLAM's hallucination mitigation via learned refusal on unanswerable queries.",
     "matched": true,
     "rects": [
       [
@@ -156,7 +162,7 @@
     "category": "method",
     "importance": 5,
     "quote": "First, KBLAM maps each triple into a fixed-length key-value vector pair, referred to as a knowledge token, which has sizes identical to the KV cache of a single token and can be seamlessly incorporated into each attention layer of the LLM.",
-    "reason": "Defines the core knowledge token representation bridging KB triples and LLM attention layers.",
+    "reason": "Defines the core knowledge token representation and how it matches the LLM's KV cache dimensions.",
     "matched": true,
     "rects": [
       [
@@ -202,24 +208,12 @@
     "page": 6,
     "category": "method",
     "importance": 5,
-    "quote": "The idea is that tokens in the prompt part can attend to, in addition to all previous tokens in the prompt, all knowledge tokens. On the other hand, knowledge tokens cannot attend to each other, i.e. they do not have self-attention nor query embeddings.",
-    "reason": "Explains the rectangular attention mechanism that enables linear scaling.",
+    "quote": "On the other hand, knowledge tokens cannot attend to each other, i.e. they do not have self-attention nor query embeddings.",
+    "reason": "Specifies the structural independence assumption in rectangular attention that eliminates quadratic interactions among KB items.",
     "matched": true,
     "rects": [
       [
-        235.61,
-        106.18,
-        335.64,
-        116.15
-      ],
-      [
-        108.0,
-        117.07,
-        335.64,
-        127.13
-      ],
-      [
-        108.0,
+        285.78,
         128.09,
         335.81,
         138.07
@@ -243,21 +237,45 @@
     "page": 6,
     "category": "method",
     "importance": 4,
-    "quote": "The memory and time complexity of the rectangular attention is O((M +N)N) and O((M +N)ND) respectively.",
-    "reason": "States the exact asymptotic memory and time complexity of rectangular attention.",
+    "quote": "In real settings, it is likely that M >> N, i.e. the number of external knowledge items is far larger than the size of the prompt/question, then the overhead would grow only linearly with M (instead of quadratically), which allows KBLAM to scale up to very large values of M, enabling putting a large amount of information in the context.",
+    "reason": "Explains why rectangular attention achieves linear O(M) scaling when KB size M dominates prompt length N.",
     "matched": true,
     "rects": [
       [
-        107.69,
-        221.82,
-        337.29,
-        231.69
+        108.0,
+        243.7,
+        335.81,
+        253.63
       ],
       [
         108.0,
-        232.79,
-        335.59,
-        242.65
+        254.56,
+        504.0,
+        264.62
+      ],
+      [
+        107.64,
+        265.51,
+        431.49,
+        275.58
+      ],
+      [
+        431.99,
+        267.04,
+        437.86,
+        275.09
+      ],
+      [
+        438.37,
+        265.51,
+        504.0,
+        275.58
+      ],
+      [
+        107.75,
+        276.47,
+        458.49,
+        286.53
       ]
     ]
   },
@@ -267,7 +285,7 @@
     "category": "method",
     "importance": 4,
     "quote": "This approach is motivated by the understanding that the instruction tuning process aims not to memorize specific information, but to learn a projection from the pre-trained sentence encoder space to the LLM’s semantic space.",
-    "reason": "Explains why KBLAM can be trained purely on synthetic KB data without memorizing facts.",
+    "reason": "Explains the core rationale for training linear adapters on purely synthetic KB data.",
     "matched": true,
     "rects": [
       [
@@ -296,7 +314,7 @@
     "category": "experiment",
     "importance": 4,
     "quote": "For all experiments, we use the instruction fine-tuned version of Llama3 8B (Dubey et al., 2024) as the backbone LLM, and OpenAI’s ada-002 sentence embedding model (P = 1536) as the pre-trained encoder for computing base key and value embedding (Eq. (5)).",
-    "reason": "Specifies the backbone LLM and sentence encoder used in the main experiments.",
+    "reason": "Documents the exact backbone LLM and sentence encoder configuration used across experiments.",
     "matched": true,
     "rects": [
       [
@@ -325,7 +343,7 @@
     "category": "experiment",
     "importance": 5,
     "quote": "Broadly, we can see that on the synthetic dataset, KBLAM shows performance comparable to in-context learning, but with a much smaller memory footprint (Fig. 3) and hence better scalability.",
-    "reason": "Reports the main Q&A quality and memory efficiency comparison against in-context learning.",
+    "reason": "Summarizes the main Q&A benchmark finding comparing KBLAM against in-context learning.",
     "matched": true,
     "rects": [
       [
@@ -378,7 +396,7 @@
     "category": "experiment",
     "importance": 4,
     "quote": "Broadly, we notice that when the number of triples increases, both KBLAM and in-context learning show decreased precision, i.e. the models start to incorrectly refuse for having not found the information, however, in-context learning shows more drastic degradation.",
-    "reason": "Shows that KBLAM suffers less over-refusal degradation than in-context learning as KB size grows.",
+    "reason": "Reports the unanswerable-question refusal evaluation showing KBLAM degrades more gracefully than in-context learning as KB size grows.",
     "matched": true,
     "rects": [
       [
@@ -425,7 +443,7 @@
     "category": "limitation",
     "importance": 4,
     "quote": "However, as shown in Fig. 6a and 6b, KBLAM generalizes to out-of-distribution dataset (Enron) but the performance degrades.",
-    "reason": "Notes the out-of-distribution performance drop on real-world Enron email KB data.",
+    "reason": "Notes the out-of-distribution generalization gap observed on the real-world Enron KB.",
     "matched": true,
     "rects": [
       [
@@ -458,9 +476,9 @@
     "block_id": "p10_b52",
     "page": 10,
     "category": "limitation",
-    "importance": 5,
+    "importance": 4,
     "quote": "KBLAM encodes sentences in the triple as a fixed-length vector, therefore KBLAM may fail to precisely generate the text word by word.",
-    "reason": "Identifies information loss from fixed-length vector compression, limiting exact reproduction of names or numbers.",
+    "reason": "Identifies information loss from fixed-length vector compression of triples, affecting exact verbatim recall.",
     "matched": true,
     "rects": [
       [
