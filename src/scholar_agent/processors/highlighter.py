@@ -89,15 +89,24 @@ def apply_highlights(
             color = CATEGORY_COLORS.get(category, CATEGORY_COLORS["contribution"])
 
             if rects:
+                # Draw directly into the page content stream behind text (overlay=False)
+                # so Android PdfRenderer (ScholarNote) renders highlights reliably.
+                for r in rects:
+                    page.draw_rect(
+                        r,
+                        color=None,
+                        fill=color,
+                        fill_opacity=0.38,
+                        overlay=False,
+                    )
                 annot = page.add_highlight_annot(rects)
                 annot.set_colors(stroke=color)
-                annot.set_opacity(0.45)
+                annot.set_opacity(0.01)
                 annot.set_info(
                     title="ScholarAgent",
                     subject=category,
                     content=item.get("reason", ""),
                 )
-                # Critical for Android PdfRenderer / MyNote visibility: generate /AP stream
                 annot.update()
 
             enriched.append(

@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -259,6 +261,11 @@ fun FloatingNotePopup(
                         onClick = { selectedTab = 1 },
                         text = { Text("MD 메모장") }
                     )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text("AI 요약") }
+                    )
                 }
 
                 if (selectedTab == 0) {
@@ -336,7 +343,7 @@ fun FloatingNotePopup(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                } else {
+                } else if (selectedTab == 1) {
                     // Text / Markdown Notepad
                     Column(
                         modifier = Modifier
@@ -401,6 +408,42 @@ fun FloatingNotePopup(
                             ) {
                                 Text(".md 파일 저장")
                             }
+                        }
+                    }
+                } else {
+                    // Tab 2: ScholarAgent AI Summary (summary.ko.md)
+                    val safeDocId = remember(note.documentId) {
+                        note.documentId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    }
+                    val cachedSummary = remember(note.documentId, note.aiSummaryText) {
+                        val dir = File(context.filesDir, "scholar_agent/$safeDocId")
+                        val koFile = File(dir, "summary.ko.md")
+                        val enFile = File(dir, "summary.en.md")
+                        when {
+                            koFile.exists() -> koFile.readText()
+                            enFile.exists() -> enFile.readText()
+                            note.aiSummaryText.isNotBlank() -> note.aiSummaryText
+                            else -> ""
+                        }
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (cachedSummary.isBlank()) {
+                            Text(
+                                "로드된 AI 요약이 없습니다.\nGoogle Drive에서 ScholarAgent 논문을 열거나 상단 AI 버튼에서 summary.ko.md를 불러와 주세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF78350F)
+                            )
+                        } else {
+                            MarkdownMathPreview(
+                                markdown = cachedSummary,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
