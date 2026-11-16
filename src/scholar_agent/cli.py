@@ -34,7 +34,8 @@ def run_cmd(
         result["drive_assets"] = drive.sync_paper(
             paper_dir,
             paper_id=result["paper_id"],
-            published_at=meta.get("published_at", ""),
+            title=meta.get("title", result.get("title", "")),
+            mode="paper",
             store=store,
         )
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
@@ -60,6 +61,8 @@ def auth_drive_cmd() -> None:
 @app.command("sync-drive")
 def sync_drive_cmd(
     arxiv: str = typer.Option(..., "--arxiv", help="arXiv ID of already processed paper"),
+    daily: bool = typer.Option(False, "--daily", help="Store under daily/YYYY-MM-DD/{Title}/ instead of papers/{Title}/"),
+    date: str = typer.Option("", "--date", help="Optional YYYY-MM-DD date for --daily mode"),
 ) -> None:
     """Upload an already processed paper's outputs to Google Drive."""
     arxiv_id = normalize_arxiv_id(arxiv)
@@ -70,16 +73,18 @@ def sync_drive_cmd(
         raise typer.BadParameter(f"Processed paper directory not found: {paper_dir}")
 
     meta_path = paper_dir / "metadata.json"
-    published_at = ""
+    title = ""
     if meta_path.exists():
-        published_at = json.loads(meta_path.read_text(encoding="utf-8")).get("published_at", "")
+        title = json.loads(meta_path.read_text(encoding="utf-8")).get("title", "")
 
     store = SQLiteStore(root / "data" / "scholar_agent.db")
     drive = GoogleDriveStorage()
     uploaded = drive.sync_paper(
         paper_dir,
         paper_id=paper_id,
-        published_at=published_at,
+        title=title,
+        mode="daily" if daily else "paper",
+        date_str=date,
         store=store,
     )
     typer.echo(json.dumps({"status": "synced", "paper_id": paper_id, "drive_assets": uploaded}, indent=2))

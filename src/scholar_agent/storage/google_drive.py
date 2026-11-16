@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,14 @@ def _load_dotenv(env_path: Path) -> None:
             continue
         k, v = line.split("=", 1)
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def _safe_folder_name(title: str, fallback: str) -> str:
+    cleaned = re.sub(r'[\\/:*?"<>|]+', " ", title or "").strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    if not cleaned:
+        return fallback
+    return cleaned[:90].rstrip(" .")
 
 
 class GoogleDriveStorage:
@@ -169,29 +178,33 @@ class GoogleDriveStorage:
         paper_dir: Path,
         *,
         paper_id: str,
-        published_at: str = "",
+        title: str = "",
+        mode: str = "paper",
+        date_str: str = "",
         store: SQLiteStore | None = None,
     ) -> dict[str, str]:
-        """Upload curated paper artifacts to ScholarAgent/01_Papers/YYYY/MM/DD/{paper_id}/."""
-        date_str = published_at[:10] if len(published_at) >= 10 else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        parts = date_str.split("-")
-        if len(parts) != 3:
-            parts = datetime.now(timezone.utc).strftime("%Y-%m-%d").split("-")
+        """Upload curated paper artifacts to Drive.
 
-        paper_folder_id = self.ensure_folder_path(
-            [self.root_folder_name, "01_Papers", parts[0], parts[1], parts[2], paper_id]
-        )
-        summary_folder_id = self.ensure_folder(paper_folder_id, "summary")
-        highlights_folder_id = self.ensure_folder(paper_folder_id, "highlights")
+        - mode='paper': ScholarAgent/papers/{Paper Title}/
+        - mode='daily': ScholarAgent/daily/YYYY-MM-DD/{Paper Title}/
+        """
+        folder_title = _safe_folder_name(title, paper_id)
+        if mode == "daily":
+            day = date_str[:10] if len(date_str) >= 10 else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            folder_parts = [self.root_folder_name, "daily", day, folder_title]
+        else:
+            folder_parts = [self.root_folder_name, "papers", folder_title]
+
+        paper_folder_id = self.ensure_folder_path(folder_parts)
 
         upload_plan: list[tuple[str, str, Path, str]] = [
+            ("highlighted_pdf", paper_folder_id, paper_dir / "highlights" / "highlighted.pdf", "application/pdf"),
+            ("summary_ko", paper_folder_id, paper_dir / "summary" / "summary.ko.md", "text/markdown"),
+            ("summary_en", paper_folder_id, paper_dir / "summary" / "summary.en.md", "text/markdown"),
+            ("highlights_json", paper_folder_id, paper_dir / "highlights" / "highlights.json", "application/json"),
             ("original_pdf", paper_folder_id, paper_dir / "original.pdf", "application/pdf"),
             ("extracted_md", paper_folder_id, paper_dir / "extracted.md", "text/markdown"),
             ("metadata_json", paper_folder_id, paper_dir / "metadata.json", "application/json"),
-            ("summary_ko", summary_folder_id, paper_dir / "summary" / "summary.ko.md", "text/markdown"),
-            ("summary_en", summary_folder_id, paper_dir / "summary" / "summary.en.md", "text/markdown"),
-            ("highlighted_pdf", highlights_folder_id, paper_dir / "highlights" / "highlighted.pdf", "application/pdf"),
-            ("highlights_json", highlights_folder_id, paper_dir / "highlights" / "highlights.json", "application/json"),
         ]
 
         uploaded_ids: dict[str, str] = {}
