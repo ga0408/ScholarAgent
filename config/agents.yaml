@@ -11,14 +11,14 @@ roles:
   # Fast Abstract screening & metadata tagging
   triage:
     primary: antigravity
-    model: ""          # Empty = CLI default; e.g. "gemini-2.5-flash" or "sonnet"
-    effort: low
+    model: claude-opus-5-5-medium
+    effort: medium
 
-  # Deep architectural & mathematical analysis (candidates for Opus / Pro)
+  # Deep architectural & mathematical analysis
   method_deep_dive:
     primary: antigravity
     fallback: claude
-    model: ""          # Set e.g. "claude-opus-4-1" when primary is claude
+    model: claude-opus-5-5-high
     effort: high
 
   # Multimodal equation analysis (text + rendered page PNGs)
@@ -49,11 +49,11 @@ roles:
     model: ""
     effort: medium
 
-  # Final bilingual structured report synthesis (candidate for Opus / Pro)
+  # Final bilingual structured report synthesis
   synthesis:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: claude-opus-5-5-high
     effort: high
 
   # Multi-paper comparison & discussion
