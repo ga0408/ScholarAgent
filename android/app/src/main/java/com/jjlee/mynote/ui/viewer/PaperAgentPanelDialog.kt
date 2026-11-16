@@ -248,13 +248,16 @@ fun ScholarAgentPanelDialog(
                             )
                         }
                     } else {
-                        Column(
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp)
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(12.dp)
                         ) {
-                            MarkdownMathPreview(markdown = summaryMarkdown)
+                            MarkdownMathPreview(
+                                markdown = summaryMarkdown,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
                     }
                 } else {

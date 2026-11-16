@@ -130,9 +130,15 @@ fun DriveBrowserScreen(
         val targetFolderId = driveFolderStack.lastOrNull()?.first ?: folderSettings.sourceFolderId
         isLoading = true
         runCatching {
-            sourceDrivePdfs = targetFolderId?.let {
+            val rawChildren = targetFolderId?.let {
                 driveApiService.listChildrenInFolder(token, it)
             } ?: emptyList()
+            val hasHighlighted = rawChildren.any { it.name.equals("highlighted.pdf", ignoreCase = true) }
+            sourceDrivePdfs = if (hasHighlighted) {
+                rawChildren.filterNot { it.name.equals("original.pdf", ignoreCase = true) }
+            } else {
+                rawChildren
+            }
         }.onFailure { e ->
             Toast.makeText(context, "Drive 조회 오류: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -284,23 +290,12 @@ fun DriveBrowserScreen(
 
                         if (isDriveConnected) {
                             Spacer(Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                FolderCard(
-                                    title = "원본 폴더 (읽기)",
-                                    folderName = folderSettings.sourceFolderName ?: "미지정",
-                                    onSelect = { folderPickTarget = FolderPickTarget.SOURCE },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                FolderCard(
-                                    title = "수정본 폴더 (저장)",
-                                    folderName = folderSettings.exportFolderName ?: "미지정",
-                                    onSelect = { folderPickTarget = FolderPickTarget.EXPORT },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                            FolderCard(
+                                title = "Google Drive 폴더",
+                                folderName = folderSettings.sourceFolderName ?: "미지정",
+                                onSelect = { folderPickTarget = FolderPickTarget.SOURCE },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -565,17 +560,14 @@ fun DriveBrowserScreen(
 
     folderPickTarget?.let { target ->
         DriveFolderPickerDialog(
-            title = if (target == FolderPickTarget.SOURCE) "원본 PDF 폴더 선택" else "수정본 저장 폴더 선택",
+            title = "Google Drive 폴더 선택",
             folderSettings = folderSettings,
             driveApiService = driveApiService,
             onDismiss = { folderPickTarget = null },
             onSelectFolder = { item ->
                 scope.launch {
-                    if (target == FolderPickTarget.SOURCE) {
-                        settingsDataStore.setSourceFolder(item.id, item.name)
-                    } else {
-                        settingsDataStore.setExportFolder(item.id, item.name)
-                    }
+                    settingsDataStore.setSourceFolder(item.id, item.name)
+                    settingsDataStore.setExportFolder(item.id, item.name)
                     folderPickTarget = null
                     refreshDriveLists()
                 }
@@ -706,16 +698,7 @@ fun DriveBrowserScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("원본 폴더: ${folderSettings.sourceFolderName ?: "미지정"}")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                showSettingsDialog = false
-                                folderPickTarget = FolderPickTarget.EXPORT
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("수정본 폴더: ${folderSettings.exportFolderName ?: "미지정"}")
+                            Text("Google Drive 폴더: ${folderSettings.sourceFolderName ?: "미지정"}")
                         }
                         TextButton(
                             onClick = {

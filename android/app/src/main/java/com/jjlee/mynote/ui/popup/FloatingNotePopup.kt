@@ -416,12 +416,11 @@ fun FloatingNotePopup(
                     val displaySummary = remember(aiSummaryMarkdown, note.aiSummaryText) {
                         aiSummaryMarkdown.ifBlank { note.aiSummaryText }
                     }
-                    Column(
+                    Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(10.dp)
-                            .verticalScroll(rememberScrollState())
+                            .padding(8.dp)
                     ) {
                         if (displaySummary.isBlank()) {
                             Text(
@@ -432,7 +431,7 @@ fun FloatingNotePopup(
                         } else {
                             MarkdownMathPreview(
                                 markdown = displaySummary,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
