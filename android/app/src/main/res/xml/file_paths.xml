@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <files-path name="originals" path="originals/" />
+    <files-path name="annotated" path="annotated/" />
+    <external-files-path name="external_annotated" path="Documents/MyNote/Annotated/" />
+</paths>

@@ -21,7 +21,9 @@ paper-agent run --arxiv 2410.21276
 paper-agent fetch-daily --limit 10
 ```
 
-## 문서
+## 문서 & 구성
+- **Python 파이프라인 (`src/paper_agent/`)**: 논문 수집, 멀티모달 병렬 Subagent 분석, 형광펜 PDF 생성
+- **Android 태블릿 앱 (`android/` — `ScholarNote`)**: Google Drive 연동, PDF 필기, AI 요약(`summary.ko.md`) 및 형광펜(`highlights.json`) 열람
 - [아키텍처](docs/ARCHITECTURE.md)
 - [데이터베이스 스키마](docs/DATABASE.md)
 - [Agent & Runtime 명세](docs/AGENT_RUNTIME_SPEC.md)
