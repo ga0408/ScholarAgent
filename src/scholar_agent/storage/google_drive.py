@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,18 @@ from scholar_agent.database.sqlite_store import SQLiteStore
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
+TOKEN_URI = "https://oauth2.googleapis.com/token"
+
+
+def _load_dotenv(env_path: Path) -> None:
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
 class GoogleDriveStorage:
@@ -38,16 +51,37 @@ class GoogleDriveStorage:
         self._service: Any = None
 
     def authenticate(self, *, interactive: bool = True) -> Credentials:
+        _load_dotenv(get_project_root() / ".env")
         creds: Credentials | None = None
+
+        # 1. Reuse existing token.json if available
         if self.token_path.exists():
             creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
 
+        # 2. Or build credentials from .env (HomeAgent-compatible client_id/secret/refresh_token)
+        if creds is None:
+            client_id = os.getenv("GOOGLE_DRIVE_CLIENT_ID", "").strip()
+            client_secret = os.getenv("GOOGLE_DRIVE_CLIENT_SECRET", "").strip()
+            refresh_token = os.getenv("GOOGLE_DRIVE_REFRESH_TOKEN", "").strip()
+            if client_id and client_secret and refresh_token:
+                creds = Credentials(
+                    token=None,
+                    refresh_token=refresh_token,
+                    token_uri=TOKEN_URI,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    scopes=SCOPES,
+                )
+
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            self.token_path.write_text(creds.to_json(), encoding="utf-8")
+            if self.token_path.exists():
+                self.token_path.write_text(creds.to_json(), encoding="utf-8")
             return creds
 
-        if creds and creds.valid:
+        if creds and (creds.valid or (creds.refresh_token and not creds.token)):
+            if not creds.token and creds.refresh_token:
+                creds.refresh(Request())
             return creds
 
         if not interactive:

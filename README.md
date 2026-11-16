@@ -39,16 +39,22 @@ scholar-agent fetch-daily --limit 10
    - 테스트 사용자: 본인 Gmail 계정 등록 (타인에게 공개 배포할 때는 프로덕션 게시)
 
 ### 2단계: PC(`ScholarAgent`)용 데스크톱 OAuth 설정
-1. **API 및 서비스 → 사용자 인증 정보 → + 사용자 인증 정보 만들기 → OAuth 클라이언트 ID**
-2. 애플리케이션 유형: **데스크톱 앱** 선택 후 JSON 다운로드
-3. 내려받은 파일을 프로젝트 루트에 `credentials.json`으로 저장합니다 (`Git` 제외됨).
-4. 최초 1회 로그인하여 `token.json`을 발급받습니다:
-   ```bash
-   scholar-agent auth-drive
-   # 이후 이미 처리된 논문을 Drive에 업로드
-   scholar-agent sync-drive --arxiv 2410.10450
-   ```
-5. 업로드되면 Drive에 `ScholarAgent/01_Papers/YYYY/MM/DD/{paper_id}/` 폴더가 자동 생성됩니다.
+아래 두 가지 방법 중 편한 쪽을 선택합니다:
+- **방법 A (`.env` 재사용 — 기존 `HomeAgent` 등의 토큰이 있는 경우)**:
+  `.env.example`을 `.env`로 복사하고 `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN`을 입력하면 별도 로그인 없이 바로 업로드됩니다.
+- **방법 B (`credentials.json` + 브라우저 로그인)**:
+  1. **API 및 서비스 → 사용자 인증 정보 → + 사용자 인증 정보 만들기 → OAuth 클라이언트 ID** (유형: **데스크톱 앱**)
+  2. 내려받은 JSON을 프로젝트 루트에 `credentials.json`으로 저장 (`Git` 제외됨)
+  3. 최초 1회 로그인하여 `token.json` 발급:
+     ```bash
+     scholar-agent auth-drive
+     ```
+
+이후 이미 처리된 논문을 Drive에 업로드할 수 있습니다:
+```bash
+scholar-agent sync-drive --arxiv 2410.10450
+```
+업로드되면 Drive에 `ScholarAgent/01_Papers/YYYY/MM/DD/{paper_id}/` 폴더가 자동 생성됩니다.
 
 ### 3단계: 태블릿(`ScholarNote`)용 Android OAuth 설정
 1. 같은 Google Cloud 프로젝트에서 **OAuth 클라이언트 ID → Android**를 추가합니다.
