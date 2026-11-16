@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paper_agent.agents.antigravity import AntigravityAdapter
-from paper_agent.agents.base import AgentResponse, RuntimeAdapter
-from paper_agent.agents.claude import ClaudeAdapter
-from paper_agent.agents.codex import CodexAdapter
-from paper_agent.config import AgentsConfig
+from scholar_agent.agents.antigravity import AntigravityAdapter
+from scholar_agent.agents.base import AgentResponse, RuntimeAdapter
+from scholar_agent.agents.claude import ClaudeAdapter
+from scholar_agent.agents.codex import CodexAdapter
+from scholar_agent.config import AgentsConfig
 
 ADAPTERS: dict[str, type[RuntimeAdapter]] = {
     "antigravity": AntigravityAdapter,

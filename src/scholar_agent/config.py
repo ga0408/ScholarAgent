@@ -1,4 +1,4 @@
-"""Configuration loader for PaperAgent."""
+"""Configuration loader for ScholarAgent."""
 
 from __future__ import annotations
 

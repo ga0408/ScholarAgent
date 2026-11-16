@@ -1,4 +1,4 @@
-"""Base RuntimeAdapter interface for PaperAgent."""
+"""Base RuntimeAdapter interface for ScholarAgent."""
 
 from __future__ import annotations
 

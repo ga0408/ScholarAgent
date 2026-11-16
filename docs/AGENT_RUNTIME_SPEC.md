@@ -1,6 +1,6 @@
 # Agent, Runtime & Storage Specifications
 
-## 1. RuntimeAdapter (`src/paper_agent/agents/base.py`)
+## 1. RuntimeAdapter (`src/scholar_agent/agents/base.py`)
 모든 Agent Runtime(`AntigravityAdapter`, `ClaudeAdapter`, `CodexAdapter`)은 아래 공통 인터페이스를 구현합니다.
 - `run(prompt: str, *, work_dir: Path, schema_path: Path | None, images: list[Path] | None, model: str | None, effort: str | None, timeout: int) -> AgentResponse`
 - **Antigravity (`agy`)**: `agy -p <prompt> --output-format json [--json-schema <schema>] [--model <model>] [--effort <effort>] [--add-dir <work_dir>] --dangerously-skip-permissions`
@@ -14,7 +14,7 @@
 
 ## 3. Google Drive 폴더 규격
 ```text
-PaperAgent/
+ScholarAgent/
 ├── 00_Inbox/
 ├── 01_Papers/YYYY/MM/DD/{paper_id}/
 │   ├── original.pdf

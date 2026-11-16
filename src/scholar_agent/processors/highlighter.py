@@ -93,7 +93,7 @@ def apply_highlights(
                 annot.set_colors(stroke=color)
                 annot.set_opacity(0.45)
                 annot.set_info(
-                    title="PaperAgent",
+                    title="ScholarAgent",
                     subject=category,
                     content=item.get("reason", ""),
                 )

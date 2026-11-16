@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from paper_agent.agents.base import AgentResponse, RuntimeAdapter
+from scholar_agent.agents.base import AgentResponse, RuntimeAdapter
 
 
 class ClaudeAdapter(RuntimeAdapter):

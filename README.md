@@ -1,4 +1,4 @@
-# PaperAgent — Paper Intelligence Platform
+# ScholarAgent — Paper Intelligence Platform
 
 > **개인 연구 지식 플랫폼**: 논문 자동 수집 → Abstract Triage & 5편 선택 → 멀티모달 병렬 Subagent 심층 분석 → 원문 좌표 기반 형광펜 PDF 생성 → Google Drive & `MyNote` 태블릿 필기앱 배포.
 
@@ -10,19 +10,19 @@
 ## 빠른 시작
 
 ```bash
-cd ~/Code/PaperAgent
+cd ~/Code/ScholarAgent
 source .venv/bin/activate
 pip install -e .
 
 # 단일 arXiv 논문 전체 파이프라인 실행 (요약 + 형광펜 PDF)
-paper-agent run --arxiv 2410.21276
+scholar-agent run --arxiv 2410.21276
 
 # Hugging Face Daily Papers 수집 및 Abstract Triage
-paper-agent fetch-daily --limit 10
+scholar-agent fetch-daily --limit 10
 ```
 
 ## 문서 & 구성
-- **Python 파이프라인 (`src/paper_agent/`)**: 논문 수집, 멀티모달 병렬 Subagent 분석, 형광펜 PDF 생성
+- **Python 파이프라인 (`src/scholar_agent/`)**: 논문 수집, 멀티모달 병렬 Subagent 분석, 형광펜 PDF 생성
 - **Android 태블릿 앱 (`android/` — `ScholarNote`)**: Google Drive 연동, PDF 필기, AI 요약(`summary.ko.md`) 및 형광펜(`highlights.json`) 열람
 - [아키텍처](docs/ARCHITECTURE.md)
 - [데이터베이스 스키마](docs/DATABASE.md)

@@ -1,4 +1,4 @@
-"""Typer CLI entrypoint for PaperAgent (Main Orchestrator compatible JSON output)."""
+"""Typer CLI entrypoint for ScholarAgent (Main Orchestrator compatible JSON output)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from typing import Optional
 
 import typer
 
-from paper_agent.collector.arxiv import fetch_hf_daily_papers
-from paper_agent.orchestrator.pipeline import run_paper_pipeline
+from scholar_agent.collector.arxiv import fetch_hf_daily_papers
+from scholar_agent.orchestrator.pipeline import run_paper_pipeline
 
-app = typer.Typer(help="PaperAgent — Personal Research Intelligence CLI")
+app = typer.Typer(help="ScholarAgent — Personal Research Intelligence CLI")
 
 
 @app.command("run")

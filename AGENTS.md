@@ -1,13 +1,13 @@
-# AGENTS.md — PaperAgent Shared Rules
+# AGENTS.md — ScholarAgent Shared Rules
 
-This repository implements **PaperAgent**, a runtime-independent personal research intelligence platform.
+This repository implements **ScholarAgent**, a runtime-independent personal research intelligence platform.
 All coding and analysis agents (`agy`, `claude`, `codex`) share these rules.
 
 ## 1. Architecture & Independence Rules
-- **Runtime Independence**: Never couple core business logic to a specific CLI (`agy`, `claude`, `codex`). All LLM calls must go through `src/paper_agent/agents/base.py` (`RuntimeAdapter`).
+- **Runtime Independence**: Never couple core business logic to a specific CLI (`agy`, `claude`, `codex`). All LLM calls must go through `src/scholar_agent/agents/base.py` (`RuntimeAdapter`).
 - **Deterministic PDF Coordinates**: Never ask an LLM to guess PDF coordinates. LLMs select verbatim text quotes + `block_id` from `segments.json`; Python (`pymupdf`) resolves exact bounding boxes/quads and embeds `/AP` appearance streams via `annot.update()`.
 - **Main Orchestrator Readiness**:
-  - Keep core pipelines callable as pure CLI commands (`paper-agent ... --json`) and Python services, separate from any long-running daemon (Telegram poller / cron).
+  - Keep core pipelines callable as pure CLI commands (`scholar-agent ... --json`) and Python services, separate from any long-running daemon (Telegram poller / cron).
   - Use SQLite WAL mode (`PRAGMA journal_mode=WAL; busy_timeout=5000`).
   - Enforce global concurrency limits (`max_concurrent_runs`) when spawning subagents.
   - Prefix all skill names with `paper-` to prevent namespace collisions.

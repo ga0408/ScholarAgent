@@ -1,6 +1,6 @@
 # Database Schema (SQLite + WAL)
 
-`data/paper_agent.db`에 저장되며, 초기화 시 `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;`을 적용합니다.
+`data/scholar_agent.db`에 저장되며, 초기화 시 `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;`을 적용합니다.
 
 ## 주요 테이블
 

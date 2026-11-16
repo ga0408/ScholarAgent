@@ -1,4 +1,4 @@
-# Roadmap (`PaperAgent`)
+# Roadmap (`ScholarAgent`)
 
 - [x] **Phase 0**: 설계 확정, `AGENTS.md` / `CLAUDE.md` / `skills/` 심볼릭 링크 구조, JSON Schemas
 - [ ] **Phase 1 (MVP)**: `AntigravityAdapter` (`agy`) + `ClaudeAdapter`, SQLite WAL, arXiv/HF 수집, PyMuPDF 전처리(텍스트+좌표+페이지 PNG), 병렬 Subagent 요약 + 형광펜 PDF 생성 → **논문 1편 End-to-End 검증 & Git 배포**

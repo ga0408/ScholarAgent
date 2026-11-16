@@ -101,7 +101,7 @@ private fun parseHighlightsJson(raw: String): List<PaperHighlightItem> {
 
 private fun docCacheDir(context: Context, documentId: String): File {
     val safeId = documentId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-    return File(context.filesDir, "paper_agent/$safeId").apply { mkdirs() }
+    return File(context.filesDir, "scholar_agent/$safeId").apply { mkdirs() }
 }
 
 private fun loadCachedOrSiblingFile(
@@ -130,7 +130,7 @@ private fun readUriText(context: Context, uri: Uri): String {
 }
 
 @Composable
-fun PaperAgentPanelDialog(
+fun ScholarAgentPanelDialog(
     documentId: String,
     documentTitle: String,
     localOriginalFile: File?,
@@ -204,7 +204,7 @@ fun PaperAgentPanelDialog(
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("PaperAgent AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("ScholarAgent AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(documentTitle, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                     }
                     IconButton(onClick = onDismiss) {
@@ -242,7 +242,7 @@ fun PaperAgentPanelDialog(
                     if (summaryMarkdown.isBlank()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
-                                "PaperAgent에서 생성한 summary.ko.md를 불러와 보세요.",
+                                "ScholarAgent에서 생성한 summary.ko.md를 불러와 보세요.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -274,7 +274,7 @@ fun PaperAgentPanelDialog(
                     if (highlights.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
-                                "PaperAgent에서 생성한 highlights.json을 불러오면\n항목을 탭해 해당 페이지로 바로 이동할 수 있습니다.",
+                                "ScholarAgent에서 생성한 highlights.json을 불러오면\n항목을 탭해 해당 페이지로 바로 이동할 수 있습니다.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

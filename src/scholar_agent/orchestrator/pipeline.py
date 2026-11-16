@@ -7,12 +7,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from paper_agent.agents.registry import run_role
-from paper_agent.collector.arxiv import PaperMetadata, download_pdf, fetch_arxiv_metadata
-from paper_agent.config import AgentsConfig, get_project_root, load_agents_config
-from paper_agent.database.sqlite_store import SQLiteStore
-from paper_agent.processors.highlighter import apply_highlights
-from paper_agent.processors.pdf_parser import preprocess_pdf
+from scholar_agent.agents.registry import run_role
+from scholar_agent.collector.arxiv import PaperMetadata, download_pdf, fetch_arxiv_metadata
+from scholar_agent.config import AgentsConfig, get_project_root, load_agents_config
+from scholar_agent.database.sqlite_store import SQLiteStore
+from scholar_agent.processors.highlighter import apply_highlights
+from scholar_agent.processors.pdf_parser import preprocess_pdf
 
 TERMINOLOGY_RULE = (
     "CRITICAL TERMINOLOGY RULE: Keep technical terms, model names, mechanisms, "
@@ -100,7 +100,7 @@ def run_paper_pipeline(
 ) -> dict[str, Any]:
     root = get_project_root()
     config = load_agents_config()
-    store = SQLiteStore(root / "data" / "paper_agent.db")
+    store = SQLiteStore(root / "data" / "scholar_agent.db")
 
     meta: PaperMetadata = fetch_arxiv_metadata(arxiv_input)
     work_dir = (out_base_dir or (root / "data" / "papers")) / meta.paper_id

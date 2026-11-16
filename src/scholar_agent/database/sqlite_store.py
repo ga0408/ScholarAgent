@@ -1,4 +1,4 @@
-"""SQLite store with WAL mode for PaperAgent."""
+"""SQLite store with WAL mode for ScholarAgent."""
 
 from __future__ import annotations
 

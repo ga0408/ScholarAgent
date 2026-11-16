@@ -6,7 +6,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from paper_agent.agents.base import AgentResponse, RuntimeAdapter
+from scholar_agent.agents.base import AgentResponse, RuntimeAdapter
 
 
 class CodexAdapter(RuntimeAdapter):

@@ -955,7 +955,7 @@ fun PdfNoteScreen(
         // 4. Floating Note Popup Overlay
         if (showPaperAgentPanel) {
             val docTitle = document.fileName.substringBeforeLast('.').ifBlank { document.fileName }
-            PaperAgentPanelDialog(
+            ScholarAgentPanelDialog(
                 documentId = document.id,
                 documentTitle = docTitle,
                 localOriginalFile = localOriginalFile,

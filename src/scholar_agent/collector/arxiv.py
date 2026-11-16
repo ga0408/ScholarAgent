@@ -69,7 +69,7 @@ def download_pdf(pdf_url: str, dest_path: Path) -> str:
     if dest_path.exists() and dest_path.stat().st_size > 10_000:
         return hashlib.sha256(dest_path.read_bytes()).hexdigest()
 
-    headers = {"User-Agent": "PaperAgent/0.1 (research platform)"}
+    headers = {"User-Agent": "ScholarAgent/0.1 (research platform)"}
     with httpx.stream("GET", pdf_url, headers=headers, timeout=60.0, follow_redirects=True) as resp:
         resp.raise_for_status()
         data = resp.read()
