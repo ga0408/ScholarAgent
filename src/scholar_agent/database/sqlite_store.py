@@ -161,6 +161,14 @@ class SQLiteStore:
                 (status, _utc_now(), paper_id),
             )
 
+    def get_paper(self, paper_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM papers WHERE paper_id = ?",
+                (paper_id,),
+            ).fetchone()
+            return dict(row) if row is not None else None
+
     def upsert_job(
         self,
         *,

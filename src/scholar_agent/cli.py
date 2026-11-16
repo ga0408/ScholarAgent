@@ -11,6 +11,7 @@ import typer
 from scholar_agent.collector.arxiv import fetch_hf_daily_papers, normalize_arxiv_id
 from scholar_agent.config import get_project_root
 from scholar_agent.database.sqlite_store import SQLiteStore
+from scholar_agent.orchestrator.daily import prepare_daily_triage, select_and_run_daily
 from scholar_agent.orchestrator.pipeline import run_paper_pipeline
 from scholar_agent.storage.google_drive import GoogleDriveStorage
 
@@ -88,6 +89,42 @@ def sync_drive_cmd(
         store=store,
     )
     typer.echo(json.dumps({"status": "synced", "paper_id": paper_id, "drive_assets": uploaded}, indent=2))
+
+
+@app.command("daily-prepare")
+def daily_prepare_cmd(
+    limit: int = typer.Option(10, "--limit", help="Max number of HF Daily Papers to fetch and triage"),
+    date: str = typer.Option("", "--date", help="Optional YYYY-MM-DD date override"),
+    upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload triage.json & triage.md to Drive"),
+    force: bool = typer.Option(False, "--force", help="Re-run triage even if already cached for today"),
+) -> None:
+    """Fetch HF Daily Papers, deduplicate, and run fast Abstract triage (pre-summary)."""
+    result = prepare_daily_triage(
+        limit=limit,
+        date_str=date,
+        upload_drive=upload_drive,
+        force=force,
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("daily-select")
+def daily_select_cmd(
+    index: Optional[list[int]] = typer.Option(None, "--index", help="1-based index from triage.json (repeatable)"),
+    arxiv: Optional[list[str]] = typer.Option(None, "--arxiv", help="arXiv ID to select (repeatable)"),
+    date: str = typer.Option("", "--date", help="Optional YYYY-MM-DD date override"),
+    run_summary: bool = typer.Option(False, "--run-summary", help="Immediately run full summary + highlight on selected papers"),
+    upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload processed papers under daily/YYYY-MM-DD/"),
+) -> None:
+    """Select papers from daily triage and optionally run full summary + highlight."""
+    result = select_and_run_daily(
+        date_str=date,
+        indices=index,
+        arxiv_ids=arxiv,
+        run_summary=run_summary,
+        upload_drive=upload_drive,
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

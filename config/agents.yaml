@@ -8,7 +8,13 @@ defaults:
   timeout_seconds: 300
 
 roles:
-  # Fast Abstract screening & metadata tagging
+  # Batch Hugging Face Daily Papers abstract screening (fast/low-cost)
+  daily_triage:
+    primary: antigravity
+    model: gemini-3.8-flash-medium
+    effort: low
+
+  # Single-paper full context triage & page mapping
   triage:
     primary: antigravity
     model: claude-opus-5-5-medium

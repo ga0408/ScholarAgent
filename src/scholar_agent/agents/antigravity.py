@@ -47,7 +47,10 @@ class AntigravityAdapter(RuntimeAdapter):
             cmd.extend(["--json-schema", str(schema_path)])
         if model:
             cmd.extend(["--model", model])
-        if effort:
+        has_effort_suffix = bool(
+            model and model.endswith(("-low", "-medium", "-high", "-xhigh", "-max"))
+        )
+        if effort and not has_effort_suffix:
             cmd.extend(["--effort", effort])
 
         proc = subprocess.run(
