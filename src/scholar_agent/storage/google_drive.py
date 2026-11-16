@@ -17,7 +17,7 @@ from googleapiclient.http import MediaFileUpload
 from scholar_agent.config import get_project_root
 from scholar_agent.database.sqlite_store import SQLiteStore
 
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
