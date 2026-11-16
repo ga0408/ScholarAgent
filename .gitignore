@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# Local runtime data & cache (keep samples/ if explicitly committed)
+data/
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets & OAuth tokens
+.env
+credentials.json
+token.json
+secrets/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/

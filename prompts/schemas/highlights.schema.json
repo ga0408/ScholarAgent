@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["highlights"],
+  "properties": {
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block_id", "page", "category", "importance", "quote", "reason"],
+        "properties": {
+          "block_id": { "type": "string" },
+          "page": { "type": "integer" },
+          "category": {
+            "type": "string",
+            "enum": ["background", "contribution", "method", "experiment", "limitation"]
+          },
+          "importance": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "quote": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["architecture_summary", "core_mechanisms", "comparison_to_prior_art", "complexity_and_cost", "evidence_pages"],
+  "properties": {
+    "architecture_summary": { "type": "string" },
+    "core_mechanisms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "tensor_flow"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "tensor_flow": { "type": "string" }
+        }
+      }
+    },
+    "comparison_to_prior_art": { "type": "string" },
+    "complexity_and_cost": { "type": "string" },
+    "evidence_pages": { "type": "array", "items": { "type": "integer" } }
+  }
+}

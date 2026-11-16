@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["limitations", "takeaways", "critical_analysis", "future_directions"],
+  "properties": {
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "takeaways": { "type": "array", "items": { "type": "string" } },
+    "critical_analysis": { "type": "string" },
+    "future_directions": { "type": "array", "items": { "type": "string" } }
+  }
+}

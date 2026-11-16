@@ -1,0 +1,419 @@
+[
+  {
+    "block_id": "p2_b3",
+    "page": 2,
+    "category": "background",
+    "importance": 4,
+    "quote": "Systems that consolidate records into extracted facts or abstractions (Chhikara et al., 2025; Ye et al., 2026) are compact but give up accuracy: the details they discard are gone for good, and consolidation can make a memory faulty even when it is distilled from useful experience (Zhang et al., 2026a).",
+    "reason": "Explains why existing consolidation-based memory systems sacrifice accuracy and cannot recover discarded details.",
+    "matched": true,
+    "rects": [
+      [
+        373.35,
+        283.36,
+        541.12,
+        293.32
+      ],
+      [
+        70.87,
+        295.31,
+        541.15,
+        305.27
+      ],
+      [
+        70.87,
+        307.27,
+        541.12,
+        317.23
+      ],
+      [
+        70.87,
+        319.22,
+        263.43,
+        329.19
+      ]
+    ]
+  },
+  {
+    "block_id": "p2_b4",
+    "page": 2,
+    "category": "background",
+    "importance": 4,
+    "quote": "Recent studies separate user-centric memory, which personalizes an agent to its user, from agent-centric memory, which accumulates the agent’s own experience, and they find that the two face reversed challenges (Huang et al., 2026b,c).",
+    "reason": "Distinguishes user-centric and agent-centric memory and explains why a unified system must address conflicting requirements.",
+    "matched": true,
+    "rects": [
+      [
+        381.11,
+        504.53,
+        541.08,
+        514.49
+      ],
+      [
+        70.87,
+        516.48,
+        541.09,
+        526.45
+      ],
+      [
+        70.87,
+        528.44,
+        475.07,
+        538.4
+      ]
+    ]
+  },
+  {
+    "block_id": "p1_b3",
+    "page": 1,
+    "category": "contribution",
+    "importance": 5,
+    "quote": "We present MIRIX-2.0, a multi-agent memory system designed to be practical, accurate, and efficient at once.",
+    "reason": "Core thesis and primary contribution statement of the paper.",
+    "matched": true,
+    "rects": [
+      [
+        229.34,
+        184.83,
+        524.18,
+        194.8
+      ],
+      [
+        87.8,
+        196.79,
+        264.36,
+        206.75
+      ]
+    ]
+  },
+  {
+    "block_id": "p4_b3",
+    "page": 4,
+    "category": "contribution",
+    "importance": 5,
+    "quote": "To the best of our knowledge, MIRIX-2.0 is the first memory system that handles both user-centric and agent-centric memory, serving personalization and the refinement of agent skills from one store.",
+    "reason": "Highlights the novel unified architecture supporting both user personalization and procedural agent skill refinement.",
+    "matched": true,
+    "rects": [
+      [
+        226.8,
+        245.1,
+        541.4,
+        255.06
+      ],
+      [
+        80.83,
+        257.05,
+        541.33,
+        267.02
+      ],
+      [
+        80.83,
+        269.01,
+        171.26,
+        278.97
+      ]
+    ]
+  },
+  {
+    "block_id": "p2_b5",
+    "page": 2,
+    "category": "method",
+    "importance": 5,
+    "quote": "Six memory agents under a Meta Memory Manager write complete records to a typed evidence plane in a vector database, the system of record, so details survive consolidation and every graph fact the answer receives cites the rows it came from.",
+    "reason": "Describes the foundational storage-versus-index separation and provenance guarantee of MIRIX-2.0.",
+    "matched": true,
+    "rects": [
+      [
+        527.94,
+        642.01,
+        541.36,
+        651.97
+      ],
+      [
+        70.87,
+        653.97,
+        541.32,
+        663.93
+      ],
+      [
+        70.87,
+        665.92,
+        541.11,
+        675.89
+      ],
+      [
+        70.87,
+        677.88,
+        194.45,
+        687.84
+      ]
+    ]
+  },
+  {
+    "block_id": "p7_b7",
+    "page": 7,
+    "category": "method",
+    "importance": 4,
+    "quote": "Two mentions of the same dated event therefore share one frame, while two undated events with similar wording, such as two runs on different days, stay separate.",
+    "reason": "Explains the temporal occurrence identity rule that prevents distinct episodic events from collapsing.",
+    "matched": true,
+    "rects": [
+      [
+        70.51,
+        320.89,
+        541.3,
+        330.85
+      ],
+      [
+        70.51,
+        332.84,
+        327.94,
+        342.8
+      ]
+    ]
+  },
+  {
+    "block_id": "p7_b9",
+    "page": 7,
+    "category": "method",
+    "importance": 5,
+    "quote": "MIRIX-2.0 treats retrieval as the construction of a bounded evidence set rather than as open-ended similarity search.",
+    "reason": "Captures the core design principle behind graph-owned retrieval under explicit budgets.",
+    "matched": true,
+    "rects": [
+      [
+        70.87,
+        391.07,
+        541.46,
+        401.04
+      ],
+      [
+        70.87,
+        403.03,
+        99.95,
+        412.99
+      ]
+    ]
+  },
+  {
+    "block_id": "p9_b2",
+    "page": 9,
+    "category": "method",
+    "importance": 4,
+    "quote": "Semantic Dream never rewrites the memories in the vector database, and it consolidates neither episodic-only anchors nor fact nodes.",
+    "reason": "Specifies how semantic AutoDream performs lossless structural merges without mutating stored evidence.",
+    "matched": true,
+    "rects": [
+      [
+        70.87,
+        232.06,
+        541.46,
+        242.02
+      ],
+      [
+        70.87,
+        244.01,
+        169.87,
+        253.98
+      ]
+    ]
+  },
+  {
+    "block_id": "p3_b58",
+    "page": 3,
+    "category": "method",
+    "importance": 4,
+    "quote": "It judges each finished task session from quotes in its transcript, distills lessons worth reusing and mistakes worth avoiding, and lets a curator (Zhang et al., 2026c) create or edit skills whose edits can cite the experiences behind them.",
+    "reason": "Details the procedural AutoDream refinement pipeline from task transcripts to cited skills.",
+    "matched": true,
+    "rects": [
+      [
+        109.5,
+        512.28,
+        541.08,
+        522.24
+      ],
+      [
+        70.87,
+        524.24,
+        541.13,
+        534.2
+      ],
+      [
+        70.87,
+        536.19,
+        181.3,
+        546.15
+      ]
+    ]
+  },
+  {
+    "block_id": "p1_b3",
+    "page": 1,
+    "category": "experiment",
+    "importance": 5,
+    "quote": "It reaches 91.4% on LoCoMo and 72.6% on LongMemEval-S, where it leads the strongest baseline by 14.3 points, and with AutoDream disabled it gains 31.0 and 22.0 points over HyperMem on single-hop and multi-hop document QA.",
+    "reason": "Key quantitative results on conversational recall and document QA benchmarks.",
+    "matched": true,
+    "rects": [
+      [
+        186.2,
+        208.74,
+        524.17,
+        218.71
+      ],
+      [
+        87.8,
+        220.7,
+        524.18,
+        230.66
+      ],
+      [
+        87.8,
+        232.65,
+        358.82,
+        242.62
+      ]
+    ]
+  },
+  {
+    "block_id": "p1_b3",
+    "page": 1,
+    "category": "experiment",
+    "importance": 5,
+    "quote": "As procedural memory, it yields the highest mean success among the compared memory methods on ALFWorld and WebShop and reaches 49.2% on MetaClaw-Bench, against 44.0% for MetaClaw’s skill library.",
+    "reason": "Key quantitative results demonstrating procedural memory effectiveness across interactive agent benchmarks.",
+    "matched": true,
+    "rects": [
+      [
+        362.57,
+        232.65,
+        524.17,
+        242.62
+      ],
+      [
+        87.8,
+        244.61,
+        524.12,
+        254.57
+      ],
+      [
+        87.45,
+        256.57,
+        404.81,
+        266.53
+      ]
+    ]
+  },
+  {
+    "block_id": "p10_b2",
+    "page": 10,
+    "category": "experiment",
+    "importance": 4,
+    "quote": "On LoCoMo, graph retrieval raises overall accuracy from 85.7% for M0 to 88.4% for M1, and semantic AutoDream raises it to 91.4% for M2.",
+    "reason": "Ablation result isolating the accuracy gains of the provenance hypergraph and semantic AutoDream.",
+    "matched": true,
+    "rects": [
+      [
+        235.65,
+        442.56,
+        293.64,
+        452.52
+      ],
+      [
+        70.87,
+        454.51,
+        292.73,
+        464.48
+      ],
+      [
+        70.87,
+        466.47,
+        292.28,
+        476.43
+      ],
+      [
+        70.87,
+        478.42,
+        180.73,
+        488.39
+      ]
+    ]
+  },
+  {
+    "block_id": "p11_b18",
+    "page": 11,
+    "category": "limitation",
+    "importance": 4,
+    "quote": "Organizing explicit evidence does not by itself guarantee the inference needed to resolve a detective question.",
+    "reason": "Identifies an accuracy boundary observed on DetectiveQA where M1 trails baselines.",
+    "matched": true,
+    "rects": [
+      [
+        161.75,
+        554.19,
+        541.09,
+        564.15
+      ],
+      [
+        70.87,
+        566.14,
+        158.37,
+        576.1
+      ]
+    ]
+  },
+  {
+    "block_id": "p13_b22",
+    "page": 13,
+    "category": "limitation",
+    "importance": 4,
+    "quote": "Relative to M0, M1 increases ingestion time by 3.8 to 4.0 times across the three document tasks.",
+    "reason": "Quantifies the ingestion-time overhead introduced by hypergraph construction on long documents.",
+    "matched": true,
+    "rects": [
+      [
+        315.77,
+        674.27,
+        541.39,
+        684.23
+      ],
+      [
+        70.87,
+        686.22,
+        270.66,
+        696.19
+      ]
+    ]
+  },
+  {
+    "block_id": "p4_b1",
+    "page": 4,
+    "category": "limitation",
+    "importance": 4,
+    "quote": "The full system with AutoDream is not timed, and the retrieval bounds cover the evidence a question inspects, not latency measured as the history grows.",
+    "reason": "States key evaluation boundaries regarding unmeasured M2 latency and scaling of wall-clock latency with history length.",
+    "matched": true,
+    "rects": [
+      [
+        447.72,
+        125.55,
+        541.11,
+        135.51
+      ],
+      [
+        70.49,
+        137.5,
+        541.07,
+        147.47
+      ],
+      [
+        70.87,
+        149.46,
+        162.87,
+        159.42
+      ]
+    ]
+  }
+]

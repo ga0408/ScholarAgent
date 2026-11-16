@@ -1,0 +1,21 @@
+# Notification & Selection Channel Configuration
+# Experimentable adapters: telegram, mynote_drive, kakao
+
+active_channel: telegram
+
+channels:
+  telegram:
+    enabled: false
+    bot_token_env: TELEGRAM_BOT_TOKEN
+    allowed_chat_id_env: TELEGRAM_CHAT_ID
+    max_daily_selection: 5
+
+  mynote_drive:
+    enabled: false
+    drive_reports_folder: "03_DailyReports"
+    poll_interval_seconds: 60
+
+  kakao:
+    enabled: false
+    rest_api_key_env: KAKAO_REST_API_KEY
+    # One-way notification only; selection falls back to web/Drive

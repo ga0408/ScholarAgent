@@ -1,0 +1,70 @@
+# Agent Runtime & Model Routing Configuration
+# Supported runtimes: antigravity (agy), claude, codex
+
+defaults:
+  primary_runtime: antigravity
+  fallback_runtime: claude
+  max_concurrent_runs: 3
+  timeout_seconds: 300
+
+roles:
+  # Fast Abstract screening & metadata tagging
+  triage:
+    primary: antigravity
+    model: ""          # Empty = CLI default; e.g. "gemini-2.5-flash" or "sonnet"
+    effort: low
+
+  # Deep architectural & mathematical analysis (candidates for Opus / Pro)
+  method_deep_dive:
+    primary: antigravity
+    fallback: claude
+    model: ""          # Set e.g. "claude-opus-4-1" when primary is claude
+    effort: high
+
+  # Multimodal equation analysis (text + rendered page PNGs)
+  equation_explainer:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: medium
+
+  # Multimodal figure & benchmark table analysis (text + page/figure PNGs)
+  figure_table:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: medium
+
+  # Limitations, practical takeaways, follow-up ideas
+  critical_review:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: medium
+
+  # Verbatim quote selection for PDF highlighting
+  highlight_selector:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: medium
+
+  # Final bilingual structured report synthesis (candidate for Opus / Pro)
+  synthesis:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: high
+
+  # Multi-paper comparison & discussion
+  comparison:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: high
+
+  discussion:
+    primary: antigravity
+    fallback: claude
+    model: ""
+    effort: medium

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["equations"],
+  "properties": {
+    "equations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "page", "latex", "variables", "design_rationale"],
+        "properties": {
+          "label": { "type": "string" },
+          "page": { "type": "integer" },
+          "latex": { "type": "string" },
+          "variables": { "type": "array", "items": { "type": "string" } },
+          "design_rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}
