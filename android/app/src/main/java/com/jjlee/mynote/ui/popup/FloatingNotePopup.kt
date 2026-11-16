@@ -78,6 +78,7 @@ import kotlin.math.roundToInt
 fun FloatingNotePopup(
     note: PopupNoteEntity,
     documentTitle: String = note.title,
+    aiSummaryMarkdown: String = "",
     strokes: List<StrokeEntity>,
     brushState: BrushState,
     onUploadMarkdownToDrive: ((File) -> Unit)? = null,
@@ -412,19 +413,8 @@ fun FloatingNotePopup(
                     }
                 } else {
                     // Tab 2: ScholarAgent AI Summary (summary.ko.md)
-                    val safeDocId = remember(note.documentId) {
-                        note.documentId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                    }
-                    val cachedSummary = remember(note.documentId, note.aiSummaryText) {
-                        val dir = File(context.filesDir, "scholar_agent/$safeDocId")
-                        val koFile = File(dir, "summary.ko.md")
-                        val enFile = File(dir, "summary.en.md")
-                        when {
-                            koFile.exists() -> koFile.readText()
-                            enFile.exists() -> enFile.readText()
-                            note.aiSummaryText.isNotBlank() -> note.aiSummaryText
-                            else -> ""
-                        }
+                    val displaySummary = remember(aiSummaryMarkdown, note.aiSummaryText) {
+                        aiSummaryMarkdown.ifBlank { note.aiSummaryText }
                     }
                     Column(
                         modifier = Modifier
@@ -433,7 +423,7 @@ fun FloatingNotePopup(
                             .padding(10.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        if (cachedSummary.isBlank()) {
+                        if (displaySummary.isBlank()) {
                             Text(
                                 "로드된 AI 요약이 없습니다.\nGoogle Drive에서 ScholarAgent 논문을 열거나 상단 AI 버튼에서 summary.ko.md를 불러와 주세요.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -441,7 +431,7 @@ fun FloatingNotePopup(
                             )
                         } else {
                             MarkdownMathPreview(
-                                markdown = cachedSummary,
+                                markdown = displaySummary,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

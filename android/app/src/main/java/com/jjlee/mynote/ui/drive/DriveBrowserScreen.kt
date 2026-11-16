@@ -962,7 +962,7 @@ private suspend fun openDrivePdf(
     }
 }
 
-private suspend fun prefetchScholarAgentAssets(
+internal suspend fun prefetchScholarAgentAssets(
     context: android.content.Context,
     token: String,
     driveApiService: DriveApiService,

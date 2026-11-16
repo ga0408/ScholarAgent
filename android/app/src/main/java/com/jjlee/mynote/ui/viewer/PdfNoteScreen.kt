@@ -114,6 +114,7 @@ import com.jjlee.mynote.data.db.StrokeEntity
 import com.jjlee.mynote.data.db.StrokePoint
 import com.jjlee.mynote.drive.DriveApiService
 import com.jjlee.mynote.drive.DriveAuthManager
+import com.jjlee.mynote.ui.drive.prefetchScholarAgentAssets
 import com.jjlee.mynote.ink.BrushPresets
 import com.jjlee.mynote.ink.BrushState
 import com.jjlee.mynote.ink.BrushType
@@ -167,6 +168,27 @@ fun PdfNoteScreen(
     var isExporting by remember { mutableStateOf(false) }
     var popupVisible by remember { mutableStateOf(false) }
     var showPaperAgentPanel by remember { mutableStateOf(false) }
+    var aiSummaryMarkdown by remember(document.id) { mutableStateOf("") }
+
+    LaunchedEffect(document.id, showPaperAgentPanel) {
+        val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val cacheDir = File(context.filesDir, "scholar_agent/$safeId")
+        val koFile = File(cacheDir, "summary.ko.md")
+        val enFile = File(cacheDir, "summary.en.md")
+        if (!koFile.exists() && !enFile.exists() && document.sourceType == DocumentSourceType.DRIVE.name) {
+            val token = DriveAuthManager.getActiveAccessToken(context, folderSettings)
+            if (token != null) {
+                runCatching {
+                    prefetchScholarAgentAssets(context, token, driveApiService, document.sourceIdOrUri, document.id)
+                }
+            }
+        }
+        aiSummaryMarkdown = when {
+            koFile.exists() -> koFile.readText()
+            enFile.exists() -> enFile.readText()
+            else -> ""
+        }
+    }
 
     // Floating toolbar offset & expand/collapse state
     var toolbarOffsetX by remember { mutableFloatStateOf(16f) }
@@ -973,6 +995,7 @@ fun PdfNoteScreen(
             FloatingNotePopup(
                 note = activePopup,
                 documentTitle = docTitle,
+                aiSummaryMarkdown = aiSummaryMarkdown,
                 strokes = popupStrokes,
                 brushState = brushState,
                 onUploadMarkdownToDrive = { f -> uploadLocalTextFileToDrive(f) },
