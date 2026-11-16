@@ -116,6 +116,7 @@ fun DriveBrowserScreen(
     var isLoading by remember { mutableStateOf(false) }
 
     var sourceDrivePdfs by remember { mutableStateOf<List<DriveItem>>(emptyList()) }
+    var driveFolderStack by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
 
     var folderPickTarget by remember { mutableStateOf<FolderPickTarget?>(null) }
     var signInErrorDetail by remember { mutableStateOf<String?>(null) }
@@ -126,15 +127,20 @@ fun DriveBrowserScreen(
 
     suspend fun refreshDriveLists() {
         val token = DriveAuthManager.getActiveAccessToken(context, folderSettings) ?: return
+        val targetFolderId = driveFolderStack.lastOrNull()?.first ?: folderSettings.sourceFolderId
         isLoading = true
         runCatching {
-            sourceDrivePdfs = folderSettings.sourceFolderId?.let {
-                driveApiService.listPdfsInFolder(token, it)
+            sourceDrivePdfs = targetFolderId?.let {
+                driveApiService.listChildrenInFolder(token, it)
             } ?: emptyList()
         }.onFailure { e ->
             Toast.makeText(context, "Drive 조회 오류: ${e.message}", Toast.LENGTH_SHORT).show()
         }
         isLoading = false
+    }
+
+    LaunchedEffect(folderSettings.sourceFolderId) {
+        driveFolderStack = emptyList()
     }
 
     LaunchedEffect(
@@ -311,52 +317,81 @@ fun DriveBrowserScreen(
                         }
 
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            if (sourceDrivePdfs.isNotEmpty()) {
+                            if (sourceDrivePdfs.isNotEmpty() || driveFolderStack.isNotEmpty()) {
                                 item {
+                                    val pathLabel = if (driveFolderStack.isEmpty()) {
+                                        "Google Drive 논문 / 문서"
+                                    } else {
+                                        "Google Drive / ${driveFolderStack.joinToString(" / ") { it.second }}"
+                                    }
                                     Text(
-                                        "Google Drive 논문 / 문서",
+                                        pathLabel,
                                         style = MaterialTheme.typography.labelLarge,
                                         modifier = Modifier.padding(vertical = 8.dp)
                                     )
                                 }
+                                if (driveFolderStack.isNotEmpty()) {
+                                    item(key = "drive_parent_up") {
+                                        ListItem(
+                                            headlineContent = { Text(".. (상위 폴더)") },
+                                            leadingContent = { Icon(Icons.Default.FolderOpen, null) },
+                                            modifier = Modifier.clickable {
+                                                driveFolderStack = driveFolderStack.dropLast(1)
+                                                scope.launch { refreshDriveLists() }
+                                            }
+                                        )
+                                    }
+                                }
                                 items(sourceDrivePdfs, key = { it.id }) { item ->
-                                    ListItem(
-                                        headlineContent = { Text(item.name) },
-                                        supportingContent = { Text("탭하여 수정본 열기 • ${item.sizeBytes / 1024} KB") },
-                                        leadingContent = { Icon(Icons.Default.Description, null) },
-                                        trailingContent = {
-                                            OutlinedButton(
-                                                onClick = {
-                                                    scope.launch {
-                                                        openDrivePdf(
-                                                            context, item, folderSettings,
-                                                            noteDao, driveApiService,
-                                                            showStrokes = false,
-                                                            onOpenDocument = onOpenDocument
-                                                        )
+                                    if (item.mimeType == "application/vnd.google-apps.folder") {
+                                        ListItem(
+                                            headlineContent = { Text(item.name) },
+                                            supportingContent = { Text("폴더 열기") },
+                                            leadingContent = { Icon(Icons.Default.Folder, null) },
+                                            modifier = Modifier.clickable {
+                                                driveFolderStack = driveFolderStack + (item.id to item.name)
+                                                scope.launch { refreshDriveLists() }
+                                            }
+                                        )
+                                    } else {
+                                        ListItem(
+                                            headlineContent = { Text(item.name) },
+                                            supportingContent = { Text("탭하여 수정본 열기 • ${item.sizeBytes / 1024} KB") },
+                                            leadingContent = { Icon(Icons.Default.Description, null) },
+                                            trailingContent = {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            openDrivePdf(
+                                                                context, item, folderSettings,
+                                                                noteDao, driveApiService,
+                                                                showStrokes = false,
+                                                                onOpenDocument = onOpenDocument
+                                                            )
+                                                        }
                                                     }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Visibility,
+                                                        contentDescription = "원본 보기",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("원본 보기")
                                                 }
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Visibility,
-                                                    contentDescription = "원본 보기",
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("원본 보기")
+                                            },
+                                            modifier = Modifier.clickable {
+                                                scope.launch {
+                                                    openDrivePdf(
+                                                        context, item, folderSettings,
+                                                        noteDao, driveApiService,
+                                                        showStrokes = true,
+                                                        onOpenDocument = onOpenDocument
+                                                    )
+                                                }
                                             }
-                                        },
-                                        modifier = Modifier.clickable {
-                                            scope.launch {
-                                                openDrivePdf(
-                                                    context, item, folderSettings,
-                                                    noteDao, driveApiService,
-                                                    showStrokes = true,
-                                                    onOpenDocument = onOpenDocument
-                                                )
-                                            }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
 
@@ -918,9 +953,52 @@ private suspend fun openDrivePdf(
             fileName = item.name
         )
         noteDao.upsertDocument(entity)
+        runCatching {
+            prefetchScholarAgentAssets(context, token, driveApiService, item.id, docId)
+        }
         onOpenDocument(entity, destFile, showStrokes)
     }.onFailure { e ->
         Toast.makeText(context, "PDF 다운로드 실패: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+private suspend fun prefetchScholarAgentAssets(
+    context: android.content.Context,
+    token: String,
+    driveApiService: DriveApiService,
+    pdfFileId: String,
+    docId: String
+) {
+    val safeId = docId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    val cacheDir = File(context.filesDir, "scholar_agent/$safeId").apply { mkdirs() }
+    val parentId = driveApiService.getFileParents(token, pdfFileId).firstOrNull() ?: return
+
+    // 1. Check same folder for highlights.json / summary.ko.md
+    val hlFile = File(cacheDir, "highlights.json")
+    if (!hlFile.exists()) {
+        driveApiService.findChildByName(token, parentId, "highlights.json")?.let {
+            hlFile.writeText(driveApiService.downloadText(token, it.id))
+        }
+    }
+
+    val summaryFile = File(cacheDir, "summary.ko.md")
+    if (!summaryFile.exists()) {
+        val direct = driveApiService.findChildByName(token, parentId, "summary.ko.md")
+        if (direct != null) {
+            summaryFile.writeText(driveApiService.downloadText(token, direct.id))
+        } else {
+            // Check sibling summary/ folder (e.g. parent is highlights/ or paper folder)
+            val paperFolderId = driveApiService.getFileParents(token, parentId).firstOrNull() ?: parentId
+            val summaryFolder = driveApiService.findChildByName(token, paperFolderId, "summary")
+                ?: driveApiService.findChildByName(token, parentId, "summary")
+            if (summaryFolder != null) {
+                val koItem = driveApiService.findChildByName(token, summaryFolder.id, "summary.ko.md")
+                    ?: driveApiService.findChildByName(token, summaryFolder.id, "summary.en.md")
+                if (koItem != null) {
+                    summaryFile.writeText(driveApiService.downloadText(token, koItem.id))
+                }
+            }
+        }
     }
 }
 

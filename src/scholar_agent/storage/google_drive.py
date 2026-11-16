@@ -1,0 +1,173 @@
+"""Google Drive OAuth & folder-hierarchy storage sync for ScholarAgent."""
+
+from __future__ import annotations
+
+import json
+import mimetypes
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
+from scholar_agent.config import get_project_root
+from scholar_agent.database.sqlite_store import SQLiteStore
+
+SCOPES = ["https://www.googleapis.com/auth/drive"]
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+class GoogleDriveStorage:
+    """Manages OAuth2 credentials and idempotent uploads to Google Drive."""
+
+    def __init__(
+        self,
+        *,
+        credentials_path: Path | None = None,
+        token_path: Path | None = None,
+        root_folder_name: str = "ScholarAgent",
+    ) -> None:
+        root = get_project_root()
+        self.credentials_path = credentials_path or (root / "credentials.json")
+        self.token_path = token_path or (root / "token.json")
+        self.root_folder_name = root_folder_name
+        self._service: Any = None
+
+    def authenticate(self, *, interactive: bool = True) -> Credentials:
+        creds: Credentials | None = None
+        if self.token_path.exists():
+            creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            self.token_path.write_text(creds.to_json(), encoding="utf-8")
+            return creds
+
+        if creds and creds.valid:
+            return creds
+
+        if not interactive:
+            raise RuntimeError(
+                f"Google Drive token missing or invalid at {self.token_path}. "
+                "Run `scholar-agent auth-drive` first."
+            )
+
+        if not self.credentials_path.exists():
+            raise FileNotFoundError(
+                f"OAuth credentials not found at {self.credentials_path}. "
+                "Download Desktop OAuth client JSON from Google Cloud Console and save it there."
+            )
+
+        flow = InstalledAppFlow.from_client_secrets_file(str(self.credentials_path), SCOPES)
+        creds = flow.run_local_server(port=0)
+        self.token_path.write_text(creds.to_json(), encoding="utf-8")
+        return creds
+
+    @property
+    def service(self) -> Any:
+        if self._service is None:
+            creds = self.authenticate(interactive=False)
+            self._service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        return self._service
+
+    def _find_child(self, parent_id: str, name: str, *, mime_type: str | None = None) -> str | None:
+        safe_name = name.replace("'", "\\'")
+        q = f"'{parent_id}' in parents and name = '{safe_name}' and trashed = false"
+        if mime_type:
+            q += f" and mimeType = '{mime_type}'"
+        res = (
+            self.service.files()
+            .list(q=q, spaces="drive", fields="files(id, name)", pageSize=5)
+            .execute()
+        )
+        files = res.get("files", [])
+        return files[0]["id"] if files else None
+
+    def ensure_folder(self, parent_id: str, name: str) -> str:
+        existing = self._find_child(parent_id, name, mime_type=FOLDER_MIME)
+        if existing:
+            return existing
+        meta = {"name": name, "mimeType": FOLDER_MIME, "parents": [parent_id]}
+        created = self.service.files().create(body=meta, fields="id").execute()
+        return created["id"]
+
+    def ensure_folder_path(self, parts: list[str]) -> str:
+        parent = "root"
+        for part in parts:
+            parent = self.ensure_folder(parent, part)
+        return parent
+
+    def upsert_file(
+        self,
+        folder_id: str,
+        local_path: Path,
+        *,
+        remote_name: str | None = None,
+        mime_type: str | None = None,
+    ) -> str:
+        name = remote_name or local_path.name
+        guessed_mime, _ = mimetypes.guess_type(str(local_path))
+        mt = mime_type or guessed_mime or "application/octet-stream"
+        media = MediaFileUpload(str(local_path), mimetype=mt, resumable=True)
+
+        existing_id = self._find_child(folder_id, name)
+        if existing_id:
+            updated = (
+                self.service.files()
+                .update(fileId=existing_id, media_body=media, fields="id")
+                .execute()
+            )
+            return updated["id"]
+
+        meta = {"name": name, "parents": [folder_id]}
+        created = (
+            self.service.files()
+            .create(body=meta, media_body=media, fields="id")
+            .execute()
+        )
+        return created["id"]
+
+    def sync_paper(
+        self,
+        paper_dir: Path,
+        *,
+        paper_id: str,
+        published_at: str = "",
+        store: SQLiteStore | None = None,
+    ) -> dict[str, str]:
+        """Upload curated paper artifacts to ScholarAgent/01_Papers/YYYY/MM/DD/{paper_id}/."""
+        date_str = published_at[:10] if len(published_at) >= 10 else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        parts = date_str.split("-")
+        if len(parts) != 3:
+            parts = datetime.now(timezone.utc).strftime("%Y-%m-%d").split("-")
+
+        paper_folder_id = self.ensure_folder_path(
+            [self.root_folder_name, "01_Papers", parts[0], parts[1], parts[2], paper_id]
+        )
+        summary_folder_id = self.ensure_folder(paper_folder_id, "summary")
+        highlights_folder_id = self.ensure_folder(paper_folder_id, "highlights")
+
+        upload_plan: list[tuple[str, str, Path, str]] = [
+            ("original_pdf", paper_folder_id, paper_dir / "original.pdf", "application/pdf"),
+            ("extracted_md", paper_folder_id, paper_dir / "extracted.md", "text/markdown"),
+            ("metadata_json", paper_folder_id, paper_dir / "metadata.json", "application/json"),
+            ("summary_ko", summary_folder_id, paper_dir / "summary" / "summary.ko.md", "text/markdown"),
+            ("summary_en", summary_folder_id, paper_dir / "summary" / "summary.en.md", "text/markdown"),
+            ("highlighted_pdf", highlights_folder_id, paper_dir / "highlights" / "highlighted.pdf", "application/pdf"),
+            ("highlights_json", highlights_folder_id, paper_dir / "highlights" / "highlights.json", "application/json"),
+        ]
+
+        uploaded_ids: dict[str, str] = {}
+        for asset_type, folder_id, local_path, mime in upload_plan:
+            if not local_path.exists():
+                continue
+            file_id = self.upsert_file(folder_id, local_path, mime_type=mime)
+            uploaded_ids[asset_type] = file_id
+            if store is not None:
+                store.upsert_asset(paper_id, asset_type, str(local_path), file_id)
+
+        return uploaded_ids

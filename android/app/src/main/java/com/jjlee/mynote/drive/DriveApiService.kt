@@ -42,6 +42,48 @@ class DriveApiService(
             queryFiles(accessToken, query, orderBy = "modifiedTime desc")
         }
 
+    suspend fun listChildrenInFolder(accessToken: String, folderId: String): List<DriveItem> =
+        withContext(Dispatchers.IO) {
+            val query =
+                "'$folderId' in parents and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/pdf') and trashed = false"
+            queryFiles(accessToken, query, orderBy = "folder,name")
+        }
+
+    suspend fun findChildByName(accessToken: String, parentId: String, name: String): DriveItem? =
+        withContext(Dispatchers.IO) {
+            val safeName = name.replace("'", "\\'")
+            val query = "'$parentId' in parents and name = '$safeName' and trashed = false"
+            queryFiles(accessToken, query, orderBy = "name").firstOrNull()
+        }
+
+    suspend fun getFileParents(accessToken: String, fileId: String): List<String> =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=parents")
+                .header("Authorization", "Bearer $accessToken")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val parents = JSONObject(resp.body?.string().orEmpty()).optJSONArray("parents")
+                    ?: return@withContext emptyList()
+                buildList(parents.length()) {
+                    for (i in 0 until parents.length()) add(parents.getString(i))
+                }
+            }
+        }
+
+    suspend fun downloadText(accessToken: String, fileId: String): String =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
+                .header("Authorization", "Bearer $accessToken")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) error("Drive text download failed (${resp.code})")
+                resp.body?.string().orEmpty()
+            }
+        }
+
     suspend fun createFolder(
         accessToken: String,
         folderName: String,
