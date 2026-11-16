@@ -264,8 +264,11 @@ def run_paper_pipeline(
 
     ko_path = work_dir / "summary" / "summary.ko.md"
     if not ko_path.exists() or force:
+        mtime_before = ko_path.stat().st_mtime if ko_path.exists() else 0.0
         ko_prompt = (
             f"You are the Report Synthesis Agent.\n{TERMINOLOGY_RULE}\n\n"
+            f"IMPORTANT: Do NOT write or edit any files on disk. Return the complete Markdown report "
+            f"directly in your response text.\n\n"
             f"Write a comprehensive, structured Korean research report in Markdown for '{meta.title}'.\n"
             f"Use these exact 10 sections:\n"
             f"1. Overview\n2. Background\n3. Problem\n4. Motivation\n5. Contribution\n"
@@ -275,7 +278,9 @@ def run_paper_pipeline(
             f"Source analysis JSON:\n{bundle_json}"
         )
         ko_resp = run_role(config, "synthesis", ko_prompt, work_dir=work_dir)
-        ko_path.write_text(ko_resp.raw_text, encoding="utf-8")
+        file_was_written_by_agent = ko_path.exists() and ko_path.stat().st_mtime > mtime_before
+        if not (file_was_written_by_agent and len(ko_resp.raw_text) < ko_path.stat().st_size // 2):
+            ko_path.write_text(ko_resp.raw_text, encoding="utf-8")
         store.record_summary(
             paper_id=meta.paper_id,
             lang="ko",
