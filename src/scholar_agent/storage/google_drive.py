@@ -70,7 +70,6 @@ class GoogleDriveStorage:
                     token_uri=TOKEN_URI,
                     client_id=client_id,
                     client_secret=client_secret,
-                    scopes=SCOPES,
                 )
 
         if creds and creds.expired and creds.refresh_token:
