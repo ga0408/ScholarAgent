@@ -135,6 +135,13 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
+private sealed interface PageHistoryAction {
+    data class AddStroke(val stroke: StrokeEntity) : PageHistoryAction
+    data class RestoreStroke(val stroke: StrokeEntity) : PageHistoryAction
+    data class EraseAiHighlights(val keys: List<String>) : PageHistoryAction
+    data class EraseStrokes(val strokes: List<StrokeEntity>) : PageHistoryAction
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PdfNoteScreen(
@@ -229,7 +236,16 @@ fun PdfNoteScreen(
         ?: kotlinx.coroutines.flow.flowOf(emptyList()))
         .collectAsState(initial = emptyList())
 
-    val redoStack = remember(currentPage) { mutableStateListOf<StrokeEntity>() }
+    val undoStack = remember(currentPage) { mutableStateListOf<PageHistoryAction>() }
+    val redoStack = remember(currentPage) { mutableStateListOf<PageHistoryAction>() }
+
+    fun updateErasedHighlights(updated: Set<String>) {
+        erasedHighlightKeys = updated
+        val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val erasedFile = File(context.filesDir, "scholar_agent/$safeId/erased_highlights.json")
+        erasedFile.parentFile?.mkdirs()
+        erasedFile.writeText(org.json.JSONArray(updated.toList()).toString())
+    }
 
     // In-memory stroke buffer: flushed to Room DB on idle (1.5s), periodic (5s), page change, or exit
     val unsavedPageStrokes = remember(currentPage) { mutableStateListOf<StrokeEntity>() }
@@ -303,24 +319,98 @@ fun PdfNoteScreen(
         }
     }
 
+    fun removeMatchingStroke(target: StrokeEntity): StrokeEntity? {
+        val unsavedIdx = unsavedPageStrokes.indexOfLast {
+            it.pointsJson == target.pointsJson &&
+                it.brushType == target.brushType &&
+                it.colorArgb == target.colorArgb
+        }
+        if (unsavedIdx >= 0) {
+            return unsavedPageStrokes.removeAt(unsavedIdx)
+        }
+        val dbMatch = pageStrokes.lastOrNull {
+            it.pointsJson == target.pointsJson &&
+                it.brushType == target.brushType &&
+                it.colorArgb == target.colorArgb
+        }
+        if (dbMatch != null) {
+            scope.launch { noteDao.deleteStrokeById(dbMatch.id) }
+            return dbMatch
+        }
+        return null
+    }
+
     fun performUndo() {
-        val unsavedLast = unsavedPageStrokes.removeLastOrNull()
-        if (unsavedLast != null) {
-            redoStack.add(unsavedLast)
+        val action = undoStack.removeLastOrNull()
+        if (action == null) {
+            val unsavedLast = unsavedPageStrokes.removeLastOrNull()
+            if (unsavedLast != null) {
+                redoStack.add(PageHistoryAction.RestoreStroke(unsavedLast))
+                return
+            }
+            val last = pageStrokes.lastOrNull() ?: return
+            scope.launch {
+                redoStack.add(PageHistoryAction.RestoreStroke(last))
+                noteDao.deleteStrokeById(last.id)
+            }
             return
         }
-        val last = pageStrokes.lastOrNull() ?: return
-        scope.launch {
-            redoStack.add(last)
-            noteDao.deleteStrokeById(last.id)
+        when (action) {
+            is PageHistoryAction.AddStroke -> {
+                val removed = removeMatchingStroke(action.stroke)
+                if (removed != null) {
+                    redoStack.add(PageHistoryAction.RestoreStroke(removed))
+                }
+            }
+            is PageHistoryAction.RestoreStroke -> {
+                val removed = removeMatchingStroke(action.stroke)
+                if (removed != null) {
+                    redoStack.add(PageHistoryAction.RestoreStroke(removed))
+                }
+            }
+            is PageHistoryAction.EraseAiHighlights -> {
+                updateErasedHighlights(erasedHighlightKeys - action.keys.toSet())
+                redoStack.add(action)
+            }
+            is PageHistoryAction.EraseStrokes -> {
+                for (s in action.strokes) {
+                    val tempId = tempStrokeSeq--
+                    unsavedPageStrokes.add(s.copy(id = tempId))
+                }
+                lastStrokeTimeMs = System.currentTimeMillis()
+                redoStack.add(action)
+            }
         }
     }
 
     fun performRedo() {
-        val restored = redoStack.removeLastOrNull() ?: return
-        val tempId = tempStrokeSeq--
-        unsavedPageStrokes.add(restored.copy(id = tempId))
-        lastStrokeTimeMs = System.currentTimeMillis()
+        val action = redoStack.removeLastOrNull() ?: return
+        when (action) {
+            is PageHistoryAction.RestoreStroke -> {
+                val tempId = tempStrokeSeq--
+                val restored = action.stroke.copy(id = tempId)
+                unsavedPageStrokes.add(restored)
+                lastStrokeTimeMs = System.currentTimeMillis()
+                undoStack.add(PageHistoryAction.AddStroke(restored))
+            }
+            is PageHistoryAction.AddStroke -> {
+                val tempId = tempStrokeSeq--
+                val restored = action.stroke.copy(id = tempId)
+                unsavedPageStrokes.add(restored)
+                lastStrokeTimeMs = System.currentTimeMillis()
+                undoStack.add(PageHistoryAction.AddStroke(restored))
+            }
+            is PageHistoryAction.EraseAiHighlights -> {
+                updateErasedHighlights(erasedHighlightKeys + action.keys)
+                undoStack.add(action)
+            }
+            is PageHistoryAction.EraseStrokes -> {
+                for (s in action.strokes) {
+                    removeMatchingStroke(s)
+                }
+                undoStack.add(action)
+            }
+        }
     }
 
     fun openMemoPopup(toggleIfVisible: Boolean = false) {
@@ -647,29 +737,84 @@ fun PdfNoteScreen(
                             }
                         }
 
+                        fun eraseAiHighlightsMatching(rectMatches: (List<Float>) -> Boolean) {
+                            if (aiHighlights.isEmpty()) return
+                            val newlyErased = mutableListOf<String>()
+                            for (hl in aiHighlights) {
+                                if (hl.page != currentPage + 1) continue
+                                val key = "${hl.page}:${hl.blockId}:${hl.quote.hashCode()}"
+                                if (key in erasedHighlightKeys) continue
+                                if (hl.rects.any { r -> r.size >= 4 && rectMatches(r) }) {
+                                    newlyErased.add(key)
+                                }
+                            }
+                            if (newlyErased.isNotEmpty()) {
+                                updateErasedHighlights(erasedHighlightKeys + newlyErased)
+                                redoStack.clear()
+                                undoStack.add(PageHistoryAction.EraseAiHighlights(newlyErased))
+                            }
+                        }
+
                         val eraseAiHighlightAt: (Float, Float) -> Unit = { nx, ny ->
                             val pageSizePt = pdfManager.getPageSizePt(currentPage)
-                            if (pageSizePt != null && aiHighlights.isNotEmpty()) {
+                            if (pageSizePt != null) {
                                 val ptX = nx * pageSizePt.first
                                 val ptY = ny * pageSizePt.second
-                                val newlyErased = mutableListOf<String>()
-                                for (hl in aiHighlights) {
-                                    if (hl.page != currentPage + 1) continue
-                                    val key = "${hl.page}:${hl.blockId}:${hl.quote.hashCode()}"
-                                    if (key in erasedHighlightKeys) continue
-                                    val hit = hl.rects.any { r ->
-                                        r.size >= 4 && ptX in (r[0] - 6f)..(r[2] + 6f) && ptY in (r[1] - 6f)..(r[3] + 6f)
-                                    }
-                                    if (hit) newlyErased.add(key)
+                                eraseAiHighlightsMatching { r ->
+                                    ptX in (r[0] - 6f)..(r[2] + 6f) && ptY in (r[1] - 6f)..(r[3] + 6f)
                                 }
-                                if (newlyErased.isNotEmpty()) {
-                                    val updated = erasedHighlightKeys + newlyErased
-                                    erasedHighlightKeys = updated
-                                    val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                                    val erasedFile = File(context.filesDir, "scholar_agent/$safeId/erased_highlights.json")
-                                    erasedFile.parentFile?.mkdirs()
-                                    erasedFile.writeText(org.json.JSONArray(updated.toList()).toString())
+                            }
+                        }
+
+                        val eraseAiHighlightsInBox: (Float, Float, Float, Float) -> Unit = { leftN, topN, rightN, bottomN ->
+                            val pageSizePt = pdfManager.getPageSizePt(currentPage)
+                            if (pageSizePt != null) {
+                                val boxL = leftN * pageSizePt.first
+                                val boxT = topN * pageSizePt.second
+                                val boxR = rightN * pageSizePt.first
+                                val boxB = bottomN * pageSizePt.second
+                                eraseAiHighlightsMatching { r ->
+                                    boxL <= r[2] && boxR >= r[0] && boxT <= r[3] && boxB >= r[1]
                                 }
+                            }
+                        }
+
+                        val handleStrokeCompleted: (BrushState, List<StrokePoint>) -> Unit = { usedBrush, pts ->
+                            redoStack.clear()
+                            val tempId = tempStrokeSeq--
+                            val stroke = StrokeEntity(
+                                id = tempId,
+                                documentId = document.id,
+                                pageIndex = currentPage,
+                                popupNoteId = null,
+                                brushType = usedBrush.type.name,
+                                colorArgb = usedBrush.colorArgb,
+                                baseWidthDp = usedBrush.widthDp,
+                                alpha = usedBrush.effectiveAlpha(),
+                                pointsJson = StrokePoint.encodeList(pts)
+                            )
+                            unsavedPageStrokes.add(stroke)
+                            undoStack.add(PageHistoryAction.AddStroke(stroke))
+                            lastStrokeTimeMs = System.currentTimeMillis()
+                        }
+
+                        val handleEraseIdsRequested: (List<Long>) -> Unit = { ids ->
+                            val unsavedIds = ids.filter { it < 0 }.toSet()
+                            val dbIds = ids.filter { it > 0 }
+                            val dbIdsSet = dbIds.toSet()
+                            val erasedStrokes = unsavedPageStrokes.filter { it.id in unsavedIds } +
+                                pageStrokes.filter { it.id in dbIdsSet }
+                            if (unsavedIds.isNotEmpty()) {
+                                unsavedPageStrokes.removeAll { it.id in unsavedIds }
+                            }
+                            if (dbIds.isNotEmpty()) {
+                                scope.launch {
+                                    noteDao.deleteStrokesByIds(dbIds)
+                                }
+                            }
+                            if (erasedStrokes.isNotEmpty()) {
+                                redoStack.clear()
+                                undoStack.add(PageHistoryAction.EraseStrokes(erasedStrokes))
                             }
                         }
 
@@ -681,37 +826,10 @@ fun PdfNoteScreen(
                                     this.straightLineMode = straightLineMode
                                     this.gestureOnlyMode = gestureOnlyMode
                                     this.gestureMappings = folderSettings.gestureMappings
-                                    this.onStrokeCompleted = { usedBrush, pts ->
-                                        redoStack.clear()
-                                        val tempId = tempStrokeSeq--
-                                        unsavedPageStrokes.add(
-                                            StrokeEntity(
-                                                id = tempId,
-                                                documentId = document.id,
-                                                pageIndex = currentPage,
-                                                popupNoteId = null,
-                                                brushType = usedBrush.type.name,
-                                                colorArgb = usedBrush.colorArgb,
-                                                baseWidthDp = usedBrush.widthDp,
-                                                alpha = usedBrush.effectiveAlpha(),
-                                                pointsJson = StrokePoint.encodeList(pts)
-                                            )
-                                        )
-                                        lastStrokeTimeMs = System.currentTimeMillis()
-                                    }
-                                    this.onEraseIdsRequested = { ids ->
-                                        val unsavedIds = ids.filter { it < 0 }.toSet()
-                                        if (unsavedIds.isNotEmpty()) {
-                                            unsavedPageStrokes.removeAll { it.id in unsavedIds }
-                                        }
-                                        val dbIds = ids.filter { it > 0 }
-                                        if (dbIds.isNotEmpty()) {
-                                            scope.launch {
-                                                noteDao.deleteStrokesByIds(dbIds)
-                                            }
-                                        }
-                                    }
+                                    this.onStrokeCompleted = handleStrokeCompleted
+                                    this.onEraseIdsRequested = handleEraseIdsRequested
                                     this.onEraseAtNormalizedPoint = eraseAiHighlightAt
+                                    this.onEraseInNormalizedBox = eraseAiHighlightsInBox
                                     this.onGestureTriggered = { trigger ->
                                         val action = folderSettings.gestureMappings[trigger]
                                         if (action != null) {
@@ -726,7 +844,10 @@ fun PdfNoteScreen(
                                 view.straightLineMode = straightLineMode
                                 view.gestureOnlyMode = gestureOnlyMode
                                 view.gestureMappings = folderSettings.gestureMappings
+                                view.onStrokeCompleted = handleStrokeCompleted
+                                view.onEraseIdsRequested = handleEraseIdsRequested
                                 view.onEraseAtNormalizedPoint = eraseAiHighlightAt
+                                view.onEraseInNormalizedBox = eraseAiHighlightsInBox
                                 view.onGestureTriggered = { trigger ->
                                     val action = folderSettings.gestureMappings[trigger]
                                     if (action != null) {
