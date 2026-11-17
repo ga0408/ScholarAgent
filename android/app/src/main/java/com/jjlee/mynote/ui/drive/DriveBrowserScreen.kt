@@ -375,16 +375,16 @@ fun DriveBrowserScreen(
                                 items(sourceDriveEntries, key = { it.item.id }) { entry ->
                                     val item = entry.item
                                     if (entry.isPaperBundle) {
-                                        val primaryPdf = entry.highlightedPdf ?: entry.originalPdf!!
-                                        val originalTarget = entry.originalPdf ?: primaryPdf
+                                        val cleanBasePdf = entry.originalPdf ?: entry.highlightedPdf!!
+                                        val originalTarget = entry.originalPdf ?: cleanBasePdf
                                         ListItem(
                                             headlineContent = { Text(item.name) },
                                             supportingContent = {
                                                 Text(
                                                     if (entry.highlightedPdf != null) {
-                                                        "탭하여 하이라이트+필기 열기 • ${primaryPdf.sizeBytes / 1024} KB"
+                                                        "탭하여 하이라이트+필기 열기 • ${cleanBasePdf.sizeBytes / 1024} KB"
                                                     } else {
-                                                        "탭하여 열기 • ${primaryPdf.sizeBytes / 1024} KB"
+                                                        "탭하여 열기 • ${cleanBasePdf.sizeBytes / 1024} KB"
                                                     }
                                                 )
                                             },
@@ -418,7 +418,7 @@ fun DriveBrowserScreen(
                                                 scope.launch {
                                                     openDrivePdf(
                                                         context,
-                                                        primaryPdf.copy(name = "${item.name}.pdf"),
+                                                        cleanBasePdf.copy(name = "${item.name}.pdf"),
                                                         folderSettings,
                                                         noteDao,
                                                         driveApiService,

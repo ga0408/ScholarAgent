@@ -64,8 +64,18 @@ data class PaperHighlightItem(
     val importance: Int,
     val quote: String,
     val reason: String,
-    val matched: Boolean
+    val matched: Boolean,
+    val rects: List<List<Float>> = emptyList()
 )
+
+internal fun highlightOverlayColor(category: String): Color = when (category.lowercase()) {
+    "background" -> Color(0xFF93C5FD)
+    "contribution" -> Color(0xFFFDE047)
+    "method" -> Color(0xFF86EFAC)
+    "experiment" -> Color(0xFFFDBA74)
+    "limitation" -> Color(0xFFF9A8D4)
+    else -> Color(0xFFFDE047)
+}
 
 private fun categoryBadgeColor(category: String): Color = when (category.lowercase()) {
     "background" -> Color(0xFFDBEAFE)
@@ -76,13 +86,33 @@ private fun categoryBadgeColor(category: String): Color = when (category.lowerca
     else -> Color(0xFFE2E8F0)
 }
 
-private fun parseHighlightsJson(raw: String): List<PaperHighlightItem> {
+internal fun parseHighlightsJson(raw: String): List<PaperHighlightItem> {
     if (raw.isBlank()) return emptyList()
     return runCatching {
         val arr = JSONArray(raw)
         buildList(arr.length()) {
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val rectsArr = obj.optJSONArray("rects")
+                val rectsList = if (rectsArr != null) {
+                    buildList(rectsArr.length()) {
+                        for (j in 0 until rectsArr.length()) {
+                            val r = rectsArr.optJSONArray(j) ?: continue
+                            if (r.length() >= 4) {
+                                add(
+                                    listOf(
+                                        r.optDouble(0).toFloat(),
+                                        r.optDouble(1).toFloat(),
+                                        r.optDouble(2).toFloat(),
+                                        r.optDouble(3).toFloat()
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    emptyList()
+                }
                 add(
                     PaperHighlightItem(
                         blockId = obj.optString("block_id", ""),
@@ -91,7 +121,8 @@ private fun parseHighlightsJson(raw: String): List<PaperHighlightItem> {
                         importance = obj.optInt("importance", 3),
                         quote = obj.optString("quote", ""),
                         reason = obj.optString("reason", ""),
-                        matched = obj.optBoolean("matched", true)
+                        matched = obj.optBoolean("matched", true),
+                        rects = rectsList
                     )
                 )
             }

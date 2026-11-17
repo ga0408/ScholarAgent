@@ -2,6 +2,7 @@ package com.jjlee.mynote.ui.viewer
 
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -91,6 +92,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -168,13 +171,18 @@ fun PdfNoteScreen(
     var isExporting by remember { mutableStateOf(false) }
     var popupVisible by remember { mutableStateOf(false) }
     var showPaperAgentPanel by remember { mutableStateOf(false) }
+    var penPaletteExpanded by remember { mutableStateOf(true) }
     var aiSummaryMarkdown by remember(document.id) { mutableStateOf("") }
+    var aiHighlights by remember(document.id) { mutableStateOf<List<PaperHighlightItem>>(emptyList()) }
+    var erasedHighlightKeys by remember(document.id) { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(document.id, showPaperAgentPanel) {
         val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        val cacheDir = File(context.filesDir, "scholar_agent/$safeId")
+        val cacheDir = File(context.filesDir, "scholar_agent/$safeId").apply { mkdirs() }
         val koFile = File(cacheDir, "summary.ko.md")
         val enFile = File(cacheDir, "summary.en.md")
+        val hlFile = File(cacheDir, "highlights.json")
+        val erasedFile = File(cacheDir, "erased_highlights.json")
         if (!koFile.exists() && !enFile.exists() && document.sourceType == DocumentSourceType.DRIVE.name) {
             val token = DriveAuthManager.getActiveAccessToken(context, folderSettings)
             if (token != null) {
@@ -187,6 +195,15 @@ fun PdfNoteScreen(
             koFile.exists() -> koFile.readText()
             enFile.exists() -> enFile.readText()
             else -> ""
+        }
+        aiHighlights = if (hlFile.exists()) parseHighlightsJson(hlFile.readText()) else emptyList()
+        erasedHighlightKeys = if (erasedFile.exists()) {
+            runCatching {
+                val arr = org.json.JSONArray(erasedFile.readText())
+                buildSet { for (i in 0 until arr.length()) add(arr.getString(i)) }
+            }.getOrDefault(emptySet())
+        } else {
+            emptySet()
         }
     }
 
@@ -603,6 +620,57 @@ fun PdfNoteScreen(
                                 contentScale = ContentScale.FillBounds,
                                 modifier = Modifier.fillMaxSize()
                             )
+
+                            if (strokesVisible) {
+                                val pageSizePt = pdfManager.getPageSizePt(currentPage)
+                                val pageHighlights = aiHighlights.filter {
+                                    it.page == currentPage + 1 &&
+                                        it.rects.isNotEmpty() &&
+                                        "${it.page}:${it.blockId}:${it.quote.hashCode()}" !in erasedHighlightKeys
+                                }
+                                if (pageSizePt != null && pageHighlights.isNotEmpty()) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val scaleX = size.width / pageSizePt.first.coerceAtLeast(1f)
+                                        val scaleY = size.height / pageSizePt.second.coerceAtLeast(1f)
+                                        for (hl in pageHighlights) {
+                                            val c = highlightOverlayColor(hl.category).copy(alpha = 0.36f)
+                                            for (r in hl.rects) {
+                                                drawRect(
+                                                    color = c,
+                                                    topLeft = Offset(r[0] * scaleX, r[1] * scaleY),
+                                                    size = Size((r[2] - r[0]) * scaleX, (r[3] - r[1]) * scaleY)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        val eraseAiHighlightAt: (Float, Float) -> Unit = { nx, ny ->
+                            val pageSizePt = pdfManager.getPageSizePt(currentPage)
+                            if (pageSizePt != null && aiHighlights.isNotEmpty()) {
+                                val ptX = nx * pageSizePt.first
+                                val ptY = ny * pageSizePt.second
+                                val newlyErased = mutableListOf<String>()
+                                for (hl in aiHighlights) {
+                                    if (hl.page != currentPage + 1) continue
+                                    val key = "${hl.page}:${hl.blockId}:${hl.quote.hashCode()}"
+                                    if (key in erasedHighlightKeys) continue
+                                    val hit = hl.rects.any { r ->
+                                        r.size >= 4 && ptX in (r[0] - 6f)..(r[2] + 6f) && ptY in (r[1] - 6f)..(r[3] + 6f)
+                                    }
+                                    if (hit) newlyErased.add(key)
+                                }
+                                if (newlyErased.isNotEmpty()) {
+                                    val updated = erasedHighlightKeys + newlyErased
+                                    erasedHighlightKeys = updated
+                                    val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                                    val erasedFile = File(context.filesDir, "scholar_agent/$safeId/erased_highlights.json")
+                                    erasedFile.parentFile?.mkdirs()
+                                    erasedFile.writeText(org.json.JSONArray(updated.toList()).toString())
+                                }
+                            }
                         }
 
                         AndroidView(
@@ -643,6 +711,7 @@ fun PdfNoteScreen(
                                             }
                                         }
                                     }
+                                    this.onEraseAtNormalizedPoint = eraseAiHighlightAt
                                     this.onGestureTriggered = { trigger ->
                                         val action = folderSettings.gestureMappings[trigger]
                                         if (action != null) {
@@ -657,6 +726,7 @@ fun PdfNoteScreen(
                                 view.straightLineMode = straightLineMode
                                 view.gestureOnlyMode = gestureOnlyMode
                                 view.gestureMappings = folderSettings.gestureMappings
+                                view.onEraseAtNormalizedPoint = eraseAiHighlightAt
                                 view.onGestureTriggered = { trigger ->
                                     val action = folderSettings.gestureMappings[trigger]
                                     if (action != null) {
@@ -731,8 +801,36 @@ fun PdfNoteScreen(
                         ) {
                             VerticalDivider(modifier = Modifier.height(22.dp), color = Color(0xFFE2E8F0))
 
-                            // Flexcil-style Favorite Pen Slots + '+' Add Button (all in one row)
-                    folderSettings.favoritePens.forEach { preset ->
+                            // Collapsible Writing Tool Palette (Pen Slots)
+                            if (!penPaletteExpanded) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(brushState.colorArgb).copy(alpha = 0.14f),
+                                    modifier = Modifier
+                                        .border(1.dp, Color(brushState.colorArgb), CircleShape)
+                                        .clickable { penPaletteExpanded = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Edit,
+                                            contentDescription = "펜 팔레트 펼치기",
+                                            tint = Color(brushState.colorArgb),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Flexcil-style Favorite Pen Slots + '+' Add Button (all in one row)
+                                folderSettings.favoritePens.forEach { preset ->
                         val isSelected = !gestureOnlyMode &&
                             brushState.type == preset.brushType &&
                             brushState.colorArgb == preset.colorArgb &&
@@ -807,6 +905,18 @@ fun PdfNoteScreen(
                             )
                         }
                     }
+
+                                IconButton(
+                                    onClick = { penPaletteExpanded = false },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.ChevronLeft,
+                                        contentDescription = "펜 팔레트 줄이기",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
 
                     VerticalDivider(modifier = Modifier.height(22.dp), color = Color(0xFFE2E8F0))
 

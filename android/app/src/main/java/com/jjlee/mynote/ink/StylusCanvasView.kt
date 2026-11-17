@@ -26,6 +26,7 @@ class StylusCanvasView(context: Context) : View(context) {
     var gestureMappings: Map<GestureTrigger, GestureAction> = DefaultGestureMappings.defaults
     var onStrokeCompleted: ((BrushState, List<StrokePoint>) -> Unit)? = null
     var onEraseIdsRequested: ((List<Long>) -> Unit)? = null
+    var onEraseAtNormalizedPoint: ((Float, Float) -> Unit)? = null
     var onGestureTriggered: ((GestureTrigger) -> Unit)? = null
     var onTwoFingerTapUndo: (() -> Unit)? = null
     var onThreeFingerTapRedo: (() -> Unit)? = null
@@ -327,6 +328,7 @@ class StylusCanvasView(context: Context) : View(context) {
 
     private fun eraseAtCurrentPoints() {
         val last = activePoints.lastOrNull() ?: return
+        onEraseAtNormalizedPoint?.invoke(last.x, last.y)
         val hitRadiusNorm = 0.025f
         val hitIds = committedStrokes.filter { stroke ->
             val pts = StrokePoint.decodeList(stroke.pointsJson)

@@ -16,6 +16,9 @@ class PdfDocumentManager {
     private var fileDescriptor: ParcelFileDescriptor? = null
     private var renderer: PdfRenderer? = null
     private val renderMutex = Mutex()
+    private val pageSizesPt = mutableMapOf<Int, Pair<Float, Float>>()
+
+    fun getPageSizePt(pageIndex: Int): Pair<Float, Float>? = pageSizesPt[pageIndex]
 
     private val pageCache = object : LruCache<String, Bitmap>(16) {
         override fun sizeOf(key: String, value: Bitmap): Int = 1
@@ -48,6 +51,7 @@ class PdfDocumentManager {
                 if (!cached.isRecycled) return@withLock cached
             }
             currentRenderer.openPage(pageIndex).use { page ->
+                pageSizesPt[pageIndex] = page.width.toFloat() to page.height.toFloat()
                 val aspect = page.height.toFloat() / page.width.toFloat().coerceAtLeast(1f)
                 val targetHeight = (clampedWidth * aspect).toInt().coerceAtLeast(1)
                 val bitmap = Bitmap.createBitmap(clampedWidth, targetHeight, Bitmap.Config.ARGB_8888)
