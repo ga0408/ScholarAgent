@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["title", "subtitle", "slides"],
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "slides": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["slide_number", "section", "title", "bullets", "speaker_script"],
+        "properties": {
+          "slide_number": { "type": "integer", "minimum": 1 },
+          "section": {
+            "type": "string",
+            "enum": ["title", "overview", "introduction", "related_work", "method", "experiment", "conclusion"]
+          },
+          "title": { "type": "string" },
+          "bullets": { "type": "array", "items": { "type": "string" } },
+          "equation_text": { "type": "string" },
+          "visual_page": { "type": ["integer", "null"] },
+          "speaker_script": { "type": "string" }
+        }
+      }
+    }
+  }
+}

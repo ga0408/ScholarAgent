@@ -13,6 +13,7 @@ from scholar_agent.config import get_project_root
 from scholar_agent.database.sqlite_store import SQLiteStore
 from scholar_agent.orchestrator.daily import prepare_daily_triage, select_and_run_daily
 from scholar_agent.orchestrator.pipeline import run_paper_pipeline
+from scholar_agent.orchestrator.presentation import generate_presentation_video
 from scholar_agent.storage.google_drive import GoogleDriveStorage
 
 app = typer.Typer(help="ScholarAgent — Personal Research Intelligence CLI")
@@ -123,6 +124,25 @@ def daily_select_cmd(
         arxiv_ids=arxiv,
         run_summary=run_summary,
         upload_drive=upload_drive,
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("make-video")
+def make_video_cmd(
+    arxiv: str = typer.Option(..., "--arxiv", help="arXiv ID or URL (e.g. 2410.10450)"),
+    out_dir: Optional[Path] = typer.Option(None, "--out-dir", help="Custom papers base directory"),
+    voice: str = typer.Option("ko-KR-InJoonNeural", "--voice", help="edge-tts Korean voice"),
+    style: str = typer.Option("학술 세미나 발표 (약 3~5분, 명확하고 논리적인 톤)", "--style", help="Presentation style"),
+    force: bool = typer.Option(False, "--force", help="Regenerate presentation.json and TTS audio"),
+) -> None:
+    """Generate presentation slides, Korean TTS audio, SRT subtitles, and MP4 video for a summarized paper."""
+    result = generate_presentation_video(
+        arxiv,
+        out_base_dir=out_dir,
+        voice=voice,
+        style=style,
+        force=force,
     )
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 

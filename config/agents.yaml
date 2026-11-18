@@ -81,3 +81,10 @@ roles:
     fallback: claude
     model: gemini-4-hydrogen-medium
     effort: medium
+
+  # Presentation slide deck & spoken script planner
+  presentation_planner:
+    primary: antigravity
+    fallback: claude
+    model: gemini-4-hydrogen-medium
+    effort: medium
