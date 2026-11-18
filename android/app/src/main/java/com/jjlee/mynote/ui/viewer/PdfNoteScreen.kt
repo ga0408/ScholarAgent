@@ -723,7 +723,9 @@ fun PdfNoteScreen(
                                         val scaleX = size.width / pageSizePt.first.coerceAtLeast(1f)
                                         val scaleY = size.height / pageSizePt.second.coerceAtLeast(1f)
                                         for (hl in pageHighlights) {
-                                            val c = highlightOverlayColor(hl.category).copy(alpha = 0.36f)
+                                            val baseColor = folderSettings.aiHighlightColorArgb?.let { Color(it) }
+                                                ?: highlightOverlayColor(hl.category)
+                                            val c = baseColor.copy(alpha = 0.36f)
                                             for (r in hl.rects) {
                                                 drawRect(
                                                     color = c,
@@ -1212,6 +1214,45 @@ fun PdfNoteScreen(
                 documentId = document.id,
                 documentTitle = docTitle,
                 localOriginalFile = localOriginalFile,
+                aiHighlightColorArgb = folderSettings.aiHighlightColorArgb,
+                onSelectAiHighlightColor = { argb ->
+                    scope.launch { settingsDataStore.setAiHighlightColor(argb) }
+                },
+                onRefreshFromDrive = if (document.sourceType == DocumentSourceType.DRIVE.name) {
+                    {
+                        val token = DriveAuthManager.getActiveAccessToken(context, folderSettings)
+                        if (token == null) {
+                            false
+                        } else {
+                            val ok = runCatching {
+                                prefetchScholarAgentAssets(
+                                    context,
+                                    token,
+                                    driveApiService,
+                                    document.sourceIdOrUri,
+                                    document.id,
+                                    force = true
+                                )
+                            }.isSuccess
+                            if (ok) {
+                                val safeId = document.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                                val cacheDir = File(context.filesDir, "scholar_agent/$safeId")
+                                val koFile = File(cacheDir, "summary.ko.md")
+                                val enFile = File(cacheDir, "summary.en.md")
+                                val hlFile = File(cacheDir, "highlights.json")
+                                aiSummaryMarkdown = when {
+                                    koFile.exists() -> koFile.readText()
+                                    enFile.exists() -> enFile.readText()
+                                    else -> ""
+                                }
+                                aiHighlights = if (hlFile.exists()) parseHighlightsJson(hlFile.readText()) else emptyList()
+                            }
+                            ok
+                        }
+                    }
+                } else {
+                    null
+                },
                 onJumpToPage = { targetPageIdx ->
                     if (targetPageIdx in 0 until pageCount) {
                         currentPage = targetPageIdx

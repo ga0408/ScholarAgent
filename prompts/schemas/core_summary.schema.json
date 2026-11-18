@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["introduction", "related_works", "method", "experiments", "conclusion", "key_points"],
+  "properties": {
+    "introduction": {
+      "type": "object",
+      "required": ["problem", "prior_limitations", "key_differences", "contributions"],
+      "properties": {
+        "problem": { "type": "string" },
+        "prior_limitations": { "type": "string" },
+        "key_differences": { "type": "array", "items": { "type": "string" } },
+        "contributions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "related_works": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "methods"],
+        "properties": {
+          "category": { "type": "string" },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "summary", "needs_triage"],
+              "properties": {
+                "name": { "type": "string" },
+                "arxiv_hint": { "type": "string" },
+                "summary": { "type": "string" },
+                "needs_triage": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "method": {
+      "type": "object",
+      "required": ["overview", "differences_from_prior", "equations", "needs_deep_dive", "target_pages"],
+      "properties": {
+        "overview": { "type": "string" },
+        "differences_from_prior": { "type": "string" },
+        "equations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["latex", "meaning"],
+            "properties": {
+              "latex": { "type": "string" },
+              "meaning": { "type": "string" }
+            }
+          }
+        },
+        "needs_deep_dive": { "type": "boolean" },
+        "target_pages": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "experiments": {
+      "type": "object",
+      "required": ["benchmarks", "setup", "results_comparison", "needs_figure_table_check", "target_pages"],
+      "properties": {
+        "benchmarks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "needs_lookup"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "needs_lookup": { "type": "boolean" }
+            }
+          }
+        },
+        "setup": { "type": "string" },
+        "results_comparison": { "type": "string" },
+        "needs_figure_table_check": { "type": "boolean" },
+        "target_pages": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "required": ["closing_summary", "limitations"],
+      "properties": {
+        "closing_summary": { "type": "string" },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "key_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "summary"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["background", "contribution", "method", "experiment", "limitation"]
+          },
+          "summary": { "type": "string" }
+        }
+      }
+    }
+  }
+}

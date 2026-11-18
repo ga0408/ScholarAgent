@@ -1040,7 +1040,8 @@ internal suspend fun prefetchScholarAgentAssets(
     token: String,
     driveApiService: DriveApiService,
     pdfFileId: String,
-    docId: String
+    docId: String,
+    force: Boolean = false
 ) {
     val safeId = docId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
     val cacheDir = File(context.filesDir, "scholar_agent/$safeId").apply { mkdirs() }
@@ -1048,14 +1049,14 @@ internal suspend fun prefetchScholarAgentAssets(
 
     // 1. Check same folder for highlights.json / summary.ko.md
     val hlFile = File(cacheDir, "highlights.json")
-    if (!hlFile.exists()) {
+    if (force || !hlFile.exists()) {
         driveApiService.findChildByName(token, parentId, "highlights.json")?.let {
             hlFile.writeText(driveApiService.downloadText(token, it.id))
         }
     }
 
     val summaryFile = File(cacheDir, "summary.ko.md")
-    if (!summaryFile.exists()) {
+    if (force || !summaryFile.exists()) {
         val direct = driveApiService.findChildByName(token, parentId, "summary.ko.md")
         if (direct != null) {
             summaryFile.writeText(driveApiService.downloadText(token, direct.id))

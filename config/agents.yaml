@@ -8,69 +8,76 @@ defaults:
   timeout_seconds: 300
 
 roles:
-  # Batch Hugging Face Daily Papers abstract screening (fast/low-cost)
+  # Batch Hugging Face Daily Papers abstract screening & fast tool triage
   daily_triage:
     primary: antigravity
-    model: gemini-3.8-flash-medium
+    model: gemini-4-hydrogen-low
     effort: low
 
-  # Single-paper full context triage & page mapping
+  # Single-paper abstract-first triage & section mapping
   triage:
     primary: antigravity
-    model: claude-opus-5-5-medium
+    model: gemini-4-hydrogen-medium
+    effort: medium
+
+  # Core structured section skeleton & escalation flagger
+  core_summary:
+    primary: antigravity
+    fallback: claude
+    model: gemini-4-hydrogen-medium
     effort: medium
 
   # Deep architectural & mathematical analysis
   method_deep_dive:
     primary: antigravity
     fallback: claude
-    model: claude-opus-5-5-high
+    model: gemini-4-hydrogen-high
     effort: high
 
   # Multimodal equation analysis (text + rendered page PNGs)
   equation_explainer:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-medium
     effort: medium
 
   # Multimodal figure & benchmark table analysis (text + page/figure PNGs)
   figure_table:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-medium
     effort: medium
 
   # Limitations, practical takeaways, follow-up ideas
   critical_review:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-medium
     effort: medium
 
   # Verbatim quote selection for PDF highlighting
   highlight_selector:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-medium
     effort: medium
 
   # Final bilingual structured report synthesis
   synthesis:
     primary: antigravity
     fallback: claude
-    model: claude-opus-5-5-high
+    model: gemini-4-hydrogen-high
     effort: high
 
   # Multi-paper comparison & discussion
   comparison:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-high
     effort: high
 
   discussion:
     primary: antigravity
     fallback: claude
-    model: ""
+    model: gemini-4-hydrogen-medium
     effort: medium

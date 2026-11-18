@@ -6,7 +6,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,18 +19,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,9 +52,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.jjlee.mynote.ui.popup.MarkdownMathPreview
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
 
@@ -160,20 +171,34 @@ private fun readUriText(context: Context, uri: Uri): String {
     return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
 }
 
+private val AI_HIGHLIGHT_SINGLE_COLORS: List<Pair<String, Int>> = listOf(
+    "연보라" to 0xFFC4B5FD.toInt(),
+    "하늘" to 0xFF7DD3FC.toInt(),
+    "민트" to 0xFF6EE7B7.toInt(),
+    "살구" to 0xFFFDBA74.toInt(),
+    "핑크" to 0xFFF9A8D4.toInt(),
+    "노랑" to 0xFFFDE047.toInt()
+)
+
 @Composable
 fun ScholarAgentPanelDialog(
     documentId: String,
     documentTitle: String,
     localOriginalFile: File?,
+    aiHighlightColorArgb: Int? = null,
+    onSelectAiHighlightColor: ((Int?) -> Unit)? = null,
+    onRefreshFromDrive: (suspend () -> Boolean)? = null,
     onJumpToPage: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
     var summaryMarkdown by remember { mutableStateOf("") }
     var highlights by remember { mutableStateOf<List<PaperHighlightItem>>(emptyList()) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
-    LaunchedEffect(documentId, localOriginalFile) {
+    fun reloadFromLocal() {
         summaryMarkdown = loadCachedOrSiblingFile(
             context, documentId, localOriginalFile, "summary.ko.md", "summary"
         ).ifBlank {
@@ -183,6 +208,10 @@ fun ScholarAgentPanelDialog(
             context, documentId, localOriginalFile, "highlights.json", "highlights"
         )
         highlights = parseHighlightsJson(hlRaw)
+    }
+
+    LaunchedEffect(documentId, localOriginalFile) {
+        reloadFromLocal()
     }
 
     val pickSummaryLauncher = rememberLauncherForActivityResult(
@@ -238,6 +267,34 @@ fun ScholarAgentPanelDialog(
                         Text("ScholarAgent AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(documentTitle, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                     }
+                    if (onRefreshFromDrive != null) {
+                        IconButton(
+                            enabled = !isRefreshing,
+                            onClick = {
+                                scope.launch {
+                                    isRefreshing = true
+                                    val ok = runCatching { onRefreshFromDrive() }.getOrDefault(false)
+                                    isRefreshing = false
+                                    if (ok) {
+                                        reloadFromLocal()
+                                        Toast.makeText(
+                                            context,
+                                            "Drive에서 최신 요약·하이라이트를 새로고침했습니다 (내 필기 유지)",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(context, "Drive 새로고침 실패 (토큰/네트워크 확인)", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Drive에서 최신 요약/하이라이트 새로고침")
+                            }
+                        }
+                    }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "닫기")
                     }
@@ -292,6 +349,60 @@ fun ScholarAgentPanelDialog(
                         }
                     }
                 } else {
+                    if (onSelectAiHighlightColor != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFEDE9FE), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    "AI 전용 색상",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF5B21B6),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            FilterChip(
+                                selected = aiHighlightColorArgb == null,
+                                onClick = { onSelectAiHighlightColor(null) },
+                                label = { Text("카테고리별") }
+                            )
+                            AI_HIGHLIGHT_SINGLE_COLORS.forEach { (label, argb) ->
+                                val selected = aiHighlightColorArgb == argb
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(argb))
+                                        .border(
+                                            width = if (selected) 2.5.dp else 1.dp,
+                                            color = if (selected) MaterialTheme.colorScheme.primary else Color(0xFF94A3B8),
+                                            shape = CircleShape
+                                        )
+                                        .clickable { onSelectAiHighlightColor(argb) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = label,
+                                            tint = Color(0xFF0F172A),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalDivider()
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -338,20 +449,41 @@ fun ScholarAgentPanelDialog(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(
-                                                        categoryBadgeColor(item.category),
-                                                        RoundedCornerShape(6.dp)
-                                                    )
-                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
-                                                Text(
-                                                    item.category.uppercase(),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color(0xFF1E293B),
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(
+                                                            aiHighlightColorArgb?.let { Color(it).copy(alpha = 0.5f) }
+                                                                ?: Color(0xFFEDE9FE),
+                                                            RoundedCornerShape(6.dp)
+                                                        )
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        "AI",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color(0xFF4C1D95),
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(
+                                                            categoryBadgeColor(item.category),
+                                                            RoundedCornerShape(6.dp)
+                                                        )
+                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        item.category.uppercase(),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color(0xFF1E293B),
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
                                             }
                                             Text(
                                                 "p. ${item.page}  •  ★${item.importance}",

@@ -102,6 +102,22 @@ class SQLiteStore:
                     updated_at TEXT NOT NULL,
                     UNIQUE(paper_id, asset_type)
                 );
+
+                CREATE TABLE IF NOT EXISTS triage_cache (
+                    query_key TEXT PRIMARY KEY,
+                    arxiv_id TEXT DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    abstract TEXT NOT NULL DEFAULT '',
+                    triage_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS benchmark_cache (
+                    name_key TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    info_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -250,4 +266,74 @@ class SQLiteStore:
                     updated_at = excluded.updated_at
                 """,
                 (paper_id, asset_type, local_path, drive_file_id, _utc_now()),
+            )
+
+    def get_triage_cache(self, query_key: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT arxiv_id, title, abstract, triage_json, updated_at FROM triage_cache WHERE query_key = ?",
+                (query_key,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "arxiv_id": row["arxiv_id"],
+                "title": row["title"],
+                "abstract": row["abstract"],
+                "triage": json.loads(row["triage_json"]),
+                "updated_at": row["updated_at"],
+                "cached": True,
+            }
+
+    def upsert_triage_cache(
+        self,
+        *,
+        query_key: str,
+        arxiv_id: str,
+        title: str,
+        abstract: str,
+        triage: dict[str, Any],
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO triage_cache (query_key, arxiv_id, title, abstract, triage_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(query_key) DO UPDATE SET
+                    arxiv_id = excluded.arxiv_id,
+                    title = excluded.title,
+                    abstract = excluded.abstract,
+                    triage_json = excluded.triage_json,
+                    updated_at = excluded.updated_at
+                """,
+                (query_key, arxiv_id, title, abstract, json.dumps(triage, ensure_ascii=False), _utc_now()),
+            )
+
+    def get_benchmark_cache(self, name_key: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT name, info_json, updated_at FROM benchmark_cache WHERE name_key = ?",
+                (name_key,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "name": row["name"],
+                "info": json.loads(row["info_json"]),
+                "updated_at": row["updated_at"],
+                "cached": True,
+            }
+
+    def upsert_benchmark_cache(self, *, name_key: str, name: str, info: dict[str, Any]) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO benchmark_cache (name_key, name, info_json, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(name_key) DO UPDATE SET
+                    name = excluded.name,
+                    info_json = excluded.info_json,
+                    updated_at = excluded.updated_at
+                """,
+                (name_key, name, json.dumps(info, ensure_ascii=False), _utc_now()),
             )

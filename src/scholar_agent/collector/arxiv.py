@@ -110,6 +110,52 @@ def fetch_arxiv_metadata(arxiv_input: str) -> PaperMetadata:
         raise
 
 
+def search_arxiv_by_title(query: str) -> PaperMetadata | None:
+    """Search arXiv by paper title/keywords and return the top metadata match."""
+    cleaned = " ".join(query.strip().split())
+    if not cleaned:
+        return None
+    headers = {"User-Agent": "ScholarAgent/0.1 (research platform)"}
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    for prefix in ("ti", "all"):
+        resp = httpx.get(
+            "https://export.arxiv.org/api/query",
+            params={"search_query": f'{prefix}:"{cleaned}"', "max_results": 1},
+            headers=headers,
+            timeout=20.0,
+            follow_redirects=True,
+        )
+        if resp.status_code != 200:
+            continue
+        root = ET.fromstring(resp.text)
+        entry = root.find("atom:entry", ns)
+        if entry is None:
+            continue
+        raw_id = (entry.findtext("atom:id", "", ns) or "").strip()
+        match = ARXIV_ID_RE.search(raw_id)
+        if not match:
+            continue
+        arxiv_id = match.group(1)
+        title = " ".join((entry.findtext("atom:title", "", ns) or "").split())
+        abstract = " ".join((entry.findtext("atom:summary", "", ns) or "").split())
+        published = (entry.findtext("atom:published", "", ns) or "")[:10]
+        authors = [
+            (a.findtext("atom:name", "", ns) or "").strip()
+            for a in entry.findall("atom:author", ns)
+        ]
+        return PaperMetadata(
+            paper_id=f"arxiv_{arxiv_id}",
+            canonical_id=f"arxiv:{arxiv_id}",
+            source="arxiv",
+            title=title,
+            authors=[a for a in authors if a],
+            abstract=abstract,
+            published_at=published,
+            pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+        )
+    return None
+
+
 def download_pdf(pdf_url: str, dest_path: Path) -> str:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     if dest_path.exists() and dest_path.stat().st_size > 10_000:
