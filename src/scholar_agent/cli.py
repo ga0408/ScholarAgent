@@ -135,6 +135,7 @@ def make_video_cmd(
     voice: str = typer.Option("ko-KR-InJoonNeural", "--voice", help="edge-tts Korean voice"),
     style: str = typer.Option("학술 세미나 발표 (약 3~5분, 명확하고 논리적인 톤)", "--style", help="Presentation style"),
     force: bool = typer.Option(False, "--force", help="Regenerate presentation.json and TTS audio"),
+    upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload presentation video & subtitles to Google Drive"),
 ) -> None:
     """Generate presentation slides, Korean TTS audio, SRT subtitles, and MP4 video for a summarized paper."""
     result = generate_presentation_video(
@@ -144,6 +145,18 @@ def make_video_cmd(
         style=style,
         force=force,
     )
+    if upload_drive:
+        paper_dir = (out_dir or (get_project_root() / "data" / "papers")) / result["paper_id"]
+        meta = json.loads((paper_dir / "metadata.json").read_text(encoding="utf-8"))
+        store = SQLiteStore(get_project_root() / "data" / "scholar_agent.db")
+        drive = GoogleDriveStorage()
+        result["drive_assets"] = drive.sync_paper(
+            paper_dir,
+            paper_id=result["paper_id"],
+            title=meta.get("title", result.get("title", "")),
+            mode="paper",
+            store=store,
+        )
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 

@@ -205,6 +205,9 @@ class GoogleDriveStorage:
             ("original_pdf", paper_folder_id, paper_dir / "original.pdf", "application/pdf"),
             ("extracted_md", paper_folder_id, paper_dir / "extracted.md", "text/markdown"),
             ("metadata_json", paper_folder_id, paper_dir / "metadata.json", "application/json"),
+            ("presentation_mp4", paper_folder_id, paper_dir / "presentation" / "presentation.mp4", "video/mp4"),
+            ("subtitles_srt", paper_folder_id, paper_dir / "presentation" / "subtitles.srt", "application/x-subrip"),
+            ("presentation_json", paper_folder_id, paper_dir / "presentation" / "presentation.json", "application/json"),
         ]
 
         uploaded_ids: dict[str, str] = {}
