@@ -54,7 +54,8 @@ data class FolderSettings(
     val manualDriveToken: String? = null,
     val favoritePens: List<FavoritePenPreset> = DefaultFavoritePens.presets,
     val gestureMappings: Map<GestureTrigger, GestureAction> = DefaultGestureMappings.defaults,
-    val aiHighlightColorArgb: Int? = null
+    val aiHighlightColorArgb: Int? = null,
+    val lastBrush: BrushState = BrushState()
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -69,6 +70,7 @@ class SettingsDataStore(private val context: Context) {
         val FAVORITE_PENS_JSON = stringPreferencesKey("favorite_pens_json")
         val GESTURE_MAPPINGS_JSON = stringPreferencesKey("gesture_mappings_json")
         val AI_HIGHLIGHT_COLOR_ARGB = intPreferencesKey("ai_highlight_color_argb")
+        val LAST_BRUSH_JSON = stringPreferencesKey("last_brush_json")
     }
 
     val folderSettings: Flow<FolderSettings> = context.dataStore.data.map { prefs ->
@@ -81,7 +83,8 @@ class SettingsDataStore(private val context: Context) {
             manualDriveToken = prefs[Keys.MANUAL_DRIVE_TOKEN],
             favoritePens = decodeFavoritePens(prefs[Keys.FAVORITE_PENS_JSON]),
             gestureMappings = decodeGestureMappings(prefs[Keys.GESTURE_MAPPINGS_JSON]),
-            aiHighlightColorArgb = prefs[Keys.AI_HIGHLIGHT_COLOR_ARGB]
+            aiHighlightColorArgb = prefs[Keys.AI_HIGHLIGHT_COLOR_ARGB],
+            lastBrush = decodeLastBrush(prefs[Keys.LAST_BRUSH_JSON])
         )
     }
 
@@ -194,5 +197,30 @@ class SettingsDataStore(private val context: Context) {
             }
         }
         return base
+    }
+
+    suspend fun saveLastBrush(brush: BrushState) {
+        val obj = JSONObject().apply {
+            put("type", brush.type.name)
+            put("color", brush.colorArgb)
+            put("width", brush.widthDp.toDouble())
+            put("alpha", brush.alpha.toDouble())
+        }
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_BRUSH_JSON] = obj.toString()
+        }
+    }
+
+    private fun decodeLastBrush(json: String?): BrushState {
+        if (json.isNullOrBlank()) return BrushState()
+        return runCatching {
+            val obj = JSONObject(json)
+            BrushState(
+                type = BrushType.fromName(obj.optString("type", BrushType.PEN.name)),
+                colorArgb = obj.optInt("color", 0xFF1E293B.toInt()),
+                widthDp = obj.optDouble("width", 3.5).toFloat(),
+                alpha = obj.optDouble("alpha", 1.0).toFloat()
+            )
+        }.getOrDefault(BrushState())
     }
 }

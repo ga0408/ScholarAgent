@@ -131,6 +131,7 @@ import com.jjlee.mynote.ui.popup.FloatingNotePopup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
@@ -165,7 +166,18 @@ fun PdfNoteScreen(
     var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var renderWidthPx by remember { mutableIntStateOf(2190) } // Lenovo 13" portrait native width
 
-    var brushState by remember { mutableStateOf(BrushState()) }
+    var brushState by remember { mutableStateOf(folderSettings.lastBrush) }
+    var brushLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        brushState = settingsDataStore.folderSettings.first().lastBrush
+        brushLoaded = true
+    }
+    LaunchedEffect(brushState, brushLoaded) {
+        if (brushLoaded) {
+            delay(250L)
+            settingsDataStore.saveLastBrush(brushState)
+        }
+    }
     var strokesVisible by remember(document.id, initialShowStrokes) {
         mutableStateOf(initialShowStrokes)
     }
