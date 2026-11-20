@@ -249,14 +249,26 @@ fun PdfNoteScreen(
 
     // In-memory stroke buffer: flushed to Room DB on idle (1.5s), periodic (5s), page change, or exit
     val unsavedPageStrokes = remember(currentPage) { mutableStateListOf<StrokeEntity>() }
+    val flushingTempIds = remember(currentPage) { mutableSetOf<Long>() }
     var lastStrokeTimeMs by remember { mutableLongStateOf(0L) }
     var tempStrokeSeq by remember { mutableLongStateOf(-1L) }
 
     suspend fun flushUnsavedStrokes() {
-        if (unsavedPageStrokes.isEmpty()) return
-        val batch = unsavedPageStrokes.map { it.copy(id = 0) }
-        unsavedPageStrokes.clear()
+        val toFlush = unsavedPageStrokes.filter { it.id !in flushingTempIds }
+        if (toFlush.isEmpty()) return
+        flushingTempIds.addAll(toFlush.map { it.id })
+        val batch = toFlush.map { it.copy(id = 0) }
         noteDao.insertStrokes(batch)
+    }
+
+    // Remove flushed strokes from unsaved buffer ONLY after Room Flow emits them (prevents flicker)
+    LaunchedEffect(pageStrokes) {
+        if (flushingTempIds.isNotEmpty() && unsavedPageStrokes.isNotEmpty()) {
+            val dbPoints = pageStrokes.mapTo(HashSet(pageStrokes.size)) { it.pointsJson }
+            unsavedPageStrokes.removeAll { it.id in flushingTempIds && it.pointsJson in dbPoints }
+            val remainingIds = unsavedPageStrokes.mapTo(HashSet()) { it.id }
+            flushingTempIds.retainAll(remainingIds)
+        }
     }
 
     // Idle flush: save 1.5s after last stroke
@@ -278,8 +290,9 @@ fun PdfNoteScreen(
     // Flush remaining strokes when switching pages or leaving screen
     DisposableEffect(document.id, currentPage) {
         onDispose {
-            if (unsavedPageStrokes.isNotEmpty()) {
-                val batch = unsavedPageStrokes.map { it.copy(id = 0) }
+            val remaining = unsavedPageStrokes.filter { it.id !in flushingTempIds }
+            if (remaining.isNotEmpty()) {
+                val batch = remaining.map { it.copy(id = 0) }
                 unsavedPageStrokes.clear()
                 CoroutineScope(Dispatchers.IO).launch {
                     noteDao.insertStrokes(batch)

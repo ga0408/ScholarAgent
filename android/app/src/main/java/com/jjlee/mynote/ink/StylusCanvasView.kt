@@ -78,7 +78,7 @@ class StylusCanvasView(context: Context) : View(context) {
     }
 
     init {
-        setLayerType(LAYER_TYPE_HARDWARE, null)
+        setLayerType(LAYER_TYPE_NONE, null)
     }
 
     fun setStrokes(strokes: List<StrokeEntity>) {
@@ -106,7 +106,22 @@ class StylusCanvasView(context: Context) : View(context) {
             decodedPointsCache.keys.retainAll(activeKeys)
         }
 
-        // Check if new list is strictly an append onto the already-rendered prefix
+        // Check if new list is identical or strictly an append onto the already-rendered prefix
+        val isIdentical = !committedBitmapDirty &&
+            committedBitmap != null &&
+            cachedCommittedStrokes.size == prevCached.size &&
+            renderedCommittedCount == prevCached.size &&
+            prevCached.indices.all { i ->
+                prevCached[i].points === cachedCommittedStrokes[i].points
+            }
+        if (isIdentical) {
+            if (pendingStrokes.isNotEmpty()) {
+                pendingStrokes.clear()
+                invalidate()
+            }
+            return
+        }
+
         val isAppendOnly = !committedBitmapDirty &&
             committedBitmap != null &&
             cachedCommittedStrokes.size >= prevCached.size &&
