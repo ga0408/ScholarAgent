@@ -46,7 +46,8 @@ object StrokeRenderer {
     ) {
         if (pts.isEmpty()) return
         if (pts.size == 1) {
-            val (px, py) = CoordinateMapper.toPixel(pts[0].x, pts[0].y, width, height)
+            val px = pts[0].x * width
+            val py = pts[0].y * height
             val paint = state.toAndroidPaint(density, pts[0].pressure, pts[0].tilt, forOverlay).apply {
                 style = Paint.Style.FILL
             }
@@ -57,20 +58,24 @@ object StrokeRenderer {
         val paint = state.toAndroidPaint(density, pts[0].pressure, pts[0].tilt, forOverlay)
         if (state.type == BrushType.HIGHLIGHTER || state.type == BrushType.TRANSLUCENT_PEN) {
             reusablePath.reset()
-            val (x0, y0) = CoordinateMapper.toPixel(pts[0].x, pts[0].y, width, height)
+            val x0 = pts[0].x * width
+            val y0 = pts[0].y * height
             reusablePath.moveTo(x0, y0)
             for (i in 1 until pts.size) {
-                val (prevX, prevY) = CoordinateMapper.toPixel(pts[i - 1].x, pts[i - 1].y, width, height)
-                val (curX, curY) = CoordinateMapper.toPixel(pts[i].x, pts[i].y, width, height)
+                val prevX = pts[i - 1].x * width
+                val prevY = pts[i - 1].y * height
+                val curX = pts[i].x * width
+                val curY = pts[i].y * height
                 reusablePath.quadTo(prevX, prevY, (prevX + curX) / 2f, (prevY + curY) / 2f)
             }
-            val (lx, ly) = CoordinateMapper.toPixel(pts.last().x, pts.last().y, width, height)
-            reusablePath.lineTo(lx, ly)
+            reusablePath.lineTo(pts.last().x * width, pts.last().y * height)
             canvas.drawPath(reusablePath, paint)
         } else {
             for (i in 1 until pts.size) {
-                val (x1, y1) = CoordinateMapper.toPixel(pts[i - 1].x, pts[i - 1].y, width, height)
-                val (x2, y2) = CoordinateMapper.toPixel(pts[i].x, pts[i].y, width, height)
+                val x1 = pts[i - 1].x * width
+                val y1 = pts[i - 1].y * height
+                val x2 = pts[i].x * width
+                val y2 = pts[i].y * height
                 paint.strokeWidth = state.computeStrokeWidthPx(
                     density = density,
                     pressure = (pts[i - 1].pressure + pts[i].pressure) / 2f,

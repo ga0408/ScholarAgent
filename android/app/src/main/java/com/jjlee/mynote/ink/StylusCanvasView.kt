@@ -1,9 +1,11 @@
 package com.jjlee.mynote.ink
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
 import android.view.MotionEvent
 import android.view.View
 import com.jjlee.mynote.data.db.StrokeEntity
@@ -45,6 +47,11 @@ class StylusCanvasView(context: Context) : View(context) {
 
     private var committedStrokes: List<StrokeEntity> = emptyList()
     private var cachedCommittedStrokes: List<CachedStroke> = emptyList()
+    private val decodedPointsCache = HashMap<String, List<StrokePoint>>()
+    private var committedBitmap: Bitmap? = null
+    private var committedCanvas: Canvas? = null
+    private var committedBitmapDirty = true
+    private var renderedCommittedCount = 0
     private val pendingStrokes = mutableListOf<PendingStroke>()
     private val activePoints = mutableListOf<StrokePoint>()
     private val activeTimedPoints = mutableListOf<TimedPoint>()
@@ -76,9 +83,12 @@ class StylusCanvasView(context: Context) : View(context) {
 
     fun setStrokes(strokes: List<StrokeEntity>) {
         if (strokes === committedStrokes) return
+        val prevCached = cachedCommittedStrokes
         committedStrokes = strokes
         cachedCommittedStrokes = strokes.mapNotNull { entity ->
-            val pts = StrokePoint.decodeList(entity.pointsJson)
+            val pts = decodedPointsCache.getOrPut(entity.pointsJson) {
+                StrokePoint.decodeList(entity.pointsJson)
+            }
             if (pts.isEmpty()) null
             else CachedStroke(
                 id = entity.id,
@@ -91,6 +101,37 @@ class StylusCanvasView(context: Context) : View(context) {
                 points = pts
             )
         }
+        if (decodedPointsCache.size > strokes.size * 2 + 64) {
+            val activeKeys = strokes.mapTo(HashSet(strokes.size)) { it.pointsJson }
+            decodedPointsCache.keys.retainAll(activeKeys)
+        }
+
+        // Check if new list is strictly an append onto the already-rendered prefix
+        val isAppendOnly = !committedBitmapDirty &&
+            committedBitmap != null &&
+            cachedCommittedStrokes.size >= prevCached.size &&
+            renderedCommittedCount == prevCached.size &&
+            prevCached.indices.all { i ->
+                prevCached[i].points === cachedCommittedStrokes[i].points
+            }
+
+        if (isAppendOnly) {
+            val c = committedCanvas
+            val bmp = committedBitmap
+            if (c != null && bmp != null && bmp.width > 0 && bmp.height > 0) {
+                val w = bmp.width.toFloat()
+                val h = bmp.height.toFloat()
+                for (i in renderedCommittedCount until cachedCommittedStrokes.size) {
+                    val s = cachedCommittedStrokes[i]
+                    StrokeRenderer.drawSingleStroke(c, s.brush, s.points, w, h, density, reusablePath)
+                }
+                renderedCommittedCount = cachedCommittedStrokes.size
+            }
+        } else {
+            committedBitmapDirty = true
+            renderedCommittedCount = 0
+        }
+
         // Drop any pending strokes that are now present in committedStrokes
         if (pendingStrokes.isNotEmpty()) {
             pendingStrokes.removeAll { pending ->
@@ -104,6 +145,51 @@ class StylusCanvasView(context: Context) : View(context) {
             }
         }
         invalidate()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw || h != oldh) {
+            committedBitmap?.recycle()
+            committedBitmap = null
+            committedCanvas = null
+            committedBitmapDirty = true
+            renderedCommittedCount = 0
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        committedBitmap?.recycle()
+        committedBitmap = null
+        committedCanvas = null
+        committedBitmapDirty = true
+        renderedCommittedCount = 0
+    }
+
+    private fun ensureCommittedBitmap(w: Int, h: Int) {
+        if (w <= 0 || h <= 0) return
+        var bmp = committedBitmap
+        if (bmp == null || bmp.width != w || bmp.height != h) {
+            bmp?.recycle()
+            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            committedBitmap = bmp
+            committedCanvas = Canvas(bmp)
+            committedBitmapDirty = true
+        }
+        if (committedBitmapDirty) {
+            val c = committedCanvas ?: return
+            c.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            val wf = w.toFloat()
+            val hf = h.toFloat()
+            for (stroke in cachedCommittedStrokes) {
+                StrokeRenderer.drawSingleStroke(
+                    c, stroke.brush, stroke.points, wf, hf, density, reusablePath
+                )
+            }
+            renderedCommittedCount = cachedCommittedStrokes.size
+            committedBitmapDirty = false
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -331,9 +417,8 @@ class StylusCanvasView(context: Context) : View(context) {
         val last = activePoints.lastOrNull() ?: return
         onEraseAtNormalizedPoint?.invoke(last.x, last.y)
         val hitRadiusNorm = 0.025f
-        val hitIds = committedStrokes.filter { stroke ->
-            val pts = StrokePoint.decodeList(stroke.pointsJson)
-            pts.any { pt -> hypot(pt.x - last.x, pt.y - last.y) <= hitRadiusNorm }
+        val hitIds = cachedCommittedStrokes.filter { stroke ->
+            stroke.points.any { pt -> hypot(pt.x - last.x, pt.y - last.y) <= hitRadiusNorm }
         }.map { it.id }
 
         if (hitIds.isNotEmpty()) {
@@ -346,11 +431,10 @@ class StylusCanvasView(context: Context) : View(context) {
             activePoints.map { it.x to it.y }
         )
         onEraseInNormalizedBox?.invoke(scribbleBox[0], scribbleBox[1], scribbleBox[2], scribbleBox[3])
-        val hitIds = committedStrokes.filter { stroke ->
-            val pts = StrokePoint.decodeList(stroke.pointsJson)
-            if (pts.isEmpty()) return@filter false
+        val hitIds = cachedCommittedStrokes.filter { stroke ->
+            if (stroke.points.isEmpty()) return@filter false
             val strokeBox = ScribbleEraserDetector.boundingBoxNormalized(
-                pts.map { it.x to it.y },
+                stroke.points.map { it.x to it.y },
                 padding = 0.005f
             )
             ScribbleEraserDetector.boxesIntersect(scribbleBox, strokeBox)
@@ -365,15 +449,14 @@ class StylusCanvasView(context: Context) : View(context) {
         super.onDraw(canvas)
         if (!strokesVisible) return
 
-        val w = width.toFloat()
-        val h = height.toFloat()
+        val iw = width
+        val ih = height
+        val w = iw.toFloat()
+        val h = ih.toFloat()
         if (w <= 0f || h <= 0f) return
 
-        for (stroke in cachedCommittedStrokes) {
-            StrokeRenderer.drawSingleStroke(
-                canvas, stroke.brush, stroke.points, w, h, density, reusablePath
-            )
-        }
+        ensureCommittedBitmap(iw, ih)
+        committedBitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
 
         for (pending in pendingStrokes) {
             StrokeRenderer.drawSingleStroke(
