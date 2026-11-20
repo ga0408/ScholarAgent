@@ -601,7 +601,7 @@ fun PdfNoteScreen(
                 }
             }
 
-            // Left-edge swipe back & single-finger edge tap for prev/next page
+            // Finger horizontal swipe for prev/next page & left-edge swipe back
             var dragStartX by remember(currentPage) { mutableFloatStateOf(0f) }
             var pageSwipeDrag by remember(currentPage) { mutableFloatStateOf(0f) }
             val leftEdgeZonePx = 80f * density
@@ -618,16 +618,13 @@ fun PdfNoteScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(currentPage, pageCount, zoomScale, folderSettings.gestureMappings) {
-                            // Observe finger touch gestures (edge tap = prev/next page, multi-finger tap/swipe)
+                        .pointerInput(folderSettings.gestureMappings) {
+                            // Observe multi-finger touch gestures without blocking scroll/zoom
                             val swipeUpThresholdPx = 75f * density
                             val pinchTolerancePx = 65f * density
-                            val tapSlopPx = 18f * density
                             awaitEachGesture {
                                 var maxTouchPointers = 0
                                 var downTimeMs = 0L
-                                var singleFingerStartPos = Offset.Zero
-                                var singleFingerMoved = false
                                 var twoFingerStartY = 0f
                                 var twoFingerStartSpan = 0f
                                 var twoFingerSwipeFired = false
@@ -644,15 +641,6 @@ fun PdfNoteScreen(
                                         val duration = System.currentTimeMillis() - downTimeMs
                                         if (!twoFingerSwipeFired && duration < 280L) {
                                             when (maxTouchPointers) {
-                                                1 -> if (!singleFingerMoved && zoomScale <= 1.05f) {
-                                                    val w = size.width.toFloat().coerceAtLeast(1f)
-                                                    val x = singleFingerStartPos.x
-                                                    if (x < w * 0.28f && currentPage > 0) {
-                                                        currentPage--
-                                                    } else if (x > w * 0.72f && currentPage < pageCount - 1) {
-                                                        currentPage++
-                                                    }
-                                                }
                                                 2 -> folderSettings.gestureMappings[GestureTrigger.TWO_FINGER_TAP]
                                                     ?.let(::executeGestureAction)
                                                 3 -> folderSettings.gestureMappings[GestureTrigger.THREE_FINGER_TAP]
@@ -664,13 +652,6 @@ fun PdfNoteScreen(
 
                                     if (downTimeMs == 0L) {
                                         downTimeMs = System.currentTimeMillis()
-                                        singleFingerStartPos = pressed.first().position
-                                    }
-                                    if (pressed.size == 1 && maxTouchPointers <= 1) {
-                                        val delta = pressed[0].position - singleFingerStartPos
-                                        if (kotlin.math.hypot(delta.x, delta.y) > tapSlopPx) {
-                                            singleFingerMoved = true
-                                        }
                                     }
                                     if (pressed.size > maxTouchPointers) {
                                         maxTouchPointers = pressed.size
@@ -710,6 +691,10 @@ fun PdfNoteScreen(
                                     onDragEnd = {
                                         if (dragStartX <= leftEdgeZonePx && pageSwipeDrag > pageSwipeThresholdPx) {
                                             onBack()
+                                        } else if (pageSwipeDrag < -pageSwipeThresholdPx && currentPage < pageCount - 1) {
+                                            currentPage++
+                                        } else if (pageSwipeDrag > pageSwipeThresholdPx && currentPage > 0) {
+                                            currentPage--
                                         }
                                         pageSwipeDrag = 0f
                                     },
