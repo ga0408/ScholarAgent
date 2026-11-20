@@ -210,9 +210,8 @@ class StylusCanvasView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val toolType = event.getToolType(0)
 
-        // Finger input: detect 2/3-finger tap and 3-finger swipe up even in gestureOnlyMode
+        // Finger input is handled by Compose pointerInput in PdfNoteScreen
         if (toolType == MotionEvent.TOOL_TYPE_FINGER) {
-            handleFingerGesture(event)
             return false
         }
 

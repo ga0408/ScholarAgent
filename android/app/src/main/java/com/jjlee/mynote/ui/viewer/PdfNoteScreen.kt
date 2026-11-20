@@ -622,12 +622,16 @@ fun PdfNoteScreen(
                             // Observe multi-finger touch gestures without blocking scroll/zoom
                             val swipeUpThresholdPx = 75f * density
                             val pinchTolerancePx = 65f * density
+                            val tapMoveSlopPx = 16f * density
+                            val tapSpanSlopPx = 12f * density
                             awaitEachGesture {
                                 var maxTouchPointers = 0
                                 var downTimeMs = 0L
                                 var twoFingerStartY = 0f
                                 var twoFingerStartSpan = 0f
                                 var twoFingerSwipeFired = false
+                                var pointersMovedBeyondTap = false
+                                val initialPositions = HashMap<androidx.compose.ui.input.pointer.PointerId, Offset>()
 
                                 while (true) {
                                     val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -639,7 +643,7 @@ fun PdfNoteScreen(
                                     val pressed = touchChanges.filter { it.pressed }
                                     if (pressed.isEmpty()) {
                                         val duration = System.currentTimeMillis() - downTimeMs
-                                        if (!twoFingerSwipeFired && duration < 280L) {
+                                        if (!twoFingerSwipeFired && !pointersMovedBeyondTap && duration < 240L) {
                                             when (maxTouchPointers) {
                                                 2 -> folderSettings.gestureMappings[GestureTrigger.TWO_FINGER_TAP]
                                                     ?.let(::executeGestureAction)
@@ -653,6 +657,14 @@ fun PdfNoteScreen(
                                     if (downTimeMs == 0L) {
                                         downTimeMs = System.currentTimeMillis()
                                     }
+                                    for (change in pressed) {
+                                        val startPos = initialPositions.getOrPut(change.id) { change.position }
+                                        val dx = change.position.x - startPos.x
+                                        val dy = change.position.y - startPos.y
+                                        if (kotlin.math.hypot(dx, dy) > tapMoveSlopPx) {
+                                            pointersMovedBeyondTap = true
+                                        }
+                                    }
                                     if (pressed.size > maxTouchPointers) {
                                         maxTouchPointers = pressed.size
                                         if (pressed.size == 2) {
@@ -664,13 +676,17 @@ fun PdfNoteScreen(
                                         }
                                     }
 
-                                    if (pressed.size == 2 && !twoFingerSwipeFired) {
+                                    if (pressed.size == 2) {
                                         val avgY = (pressed[0].position.y + pressed[1].position.y) / 2f
                                         val span = kotlin.math.hypot(
                                             pressed[1].position.x - pressed[0].position.x,
                                             pressed[1].position.y - pressed[0].position.y
                                         )
-                                        if (avgY - twoFingerStartY < -swipeUpThresholdPx &&
+                                        if (kotlin.math.abs(span - twoFingerStartSpan) > tapSpanSlopPx) {
+                                            pointersMovedBeyondTap = true
+                                        }
+                                        if (!twoFingerSwipeFired &&
+                                            avgY - twoFingerStartY < -swipeUpThresholdPx &&
                                             kotlin.math.abs(span - twoFingerStartSpan) < pinchTolerancePx
                                         ) {
                                             twoFingerSwipeFired = true
