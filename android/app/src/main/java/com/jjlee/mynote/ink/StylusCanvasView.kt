@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import com.jjlee.mynote.data.db.StrokeEntity
@@ -57,6 +58,10 @@ class StylusCanvasView(context: Context) : View(context) {
     private val activeTimedPoints = mutableListOf<TimedPoint>()
     private var straightStartPoint: StrokePoint? = null
     private var activeIsErasing = false
+    private var activeIsScribbling = false
+    private var lastHoverButtonState = 0
+    private var lastBarrelPressTimeMs = 0L
+    private var hoverPrimaryPressDownMs = 0L
 
     // Multi-touch tap & swipe tracking
     private var maxPointerCountInGesture = 0
@@ -79,6 +84,59 @@ class StylusCanvasView(context: Context) : View(context) {
 
     init {
         setLayerType(LAYER_TYPE_NONE, null)
+        isFocusable = true
+        isFocusableInTouchMode = true
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        val toolType = event.getToolType(0)
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            val btn = event.buttonState
+            val primaryNow = (btn and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0
+            val primaryPrev = (lastHoverButtonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0
+            val secondaryNow = (btn and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+            val secondaryPrev = (lastHoverButtonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+            lastHoverButtonState = btn
+
+            val now = System.currentTimeMillis()
+            if (secondaryNow && !secondaryPrev) {
+                onGestureTriggered?.invoke(GestureTrigger.BARREL_SECONDARY_PRESS)
+                return true
+            }
+            if (primaryNow && !primaryPrev) {
+                if (now - lastBarrelPressTimeMs in 35L..500L) {
+                    lastBarrelPressTimeMs = 0L
+                    hoverPrimaryPressDownMs = 0L
+                    onGestureTriggered?.invoke(GestureTrigger.PEN_DOUBLE_TAP)
+                    return true
+                }
+                lastBarrelPressTimeMs = now
+                hoverPrimaryPressDownMs = now
+                return true
+            }
+            if (!primaryNow && primaryPrev && hoverPrimaryPressDownMs > 0L) {
+                val heldMs = now - hoverPrimaryPressDownMs
+                hoverPrimaryPressDownMs = 0L
+                // Quick hover click/double-tap on Lenovo pen sensor without touching glass
+                if (heldMs in 10L..340L && activePoints.isEmpty() && !activeIsErasing) {
+                    onGestureTriggered?.invoke(GestureTrigger.PEN_DOUBLE_TAP)
+                    return true
+                }
+            }
+        }
+        return super.onGenericMotionEvent(event)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY ||
+            keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY ||
+            keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_TERTIARY ||
+            keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_TAIL
+        ) {
+            onGestureTriggered?.invoke(GestureTrigger.PEN_DOUBLE_TAP)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     fun setStrokes(strokes: List<StrokeEntity>) {
@@ -233,20 +291,33 @@ class StylusCanvasView(context: Context) : View(context) {
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                requestFocus()
                 parent?.requestDisallowInterceptTouchEvent(true)
                 activePoints.clear()
                 activeTimedPoints.clear()
                 straightStartPoint = null
                 secondaryButtonHandled = false
+                activeIsScribbling = false
+                hoverPrimaryPressDownMs = 0L
 
                 if (secondaryHeld) {
                     secondaryButtonHandled = true
                     onGestureTriggered?.invoke(GestureTrigger.BARREL_SECONDARY_PRESS)
                     return true
                 }
-                if (primaryHeld && primaryAction != GestureAction.ERASE) {
-                    onGestureTriggered?.invoke(GestureTrigger.BARREL_PRIMARY_HOLD)
-                    return true
+                if (primaryHeld) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastBarrelPressTimeMs in 35L..500L) {
+                        lastBarrelPressTimeMs = 0L
+                        secondaryButtonHandled = true
+                        onGestureTriggered?.invoke(GestureTrigger.PEN_DOUBLE_TAP)
+                        return true
+                    }
+                    lastBarrelPressTimeMs = now
+                    if (primaryAction != GestureAction.ERASE) {
+                        onGestureTriggered?.invoke(GestureTrigger.BARREL_PRIMARY_HOLD)
+                        return true
+                    }
                 }
 
                 activeIsErasing = barrelErase
@@ -274,6 +345,10 @@ class StylusCanvasView(context: Context) : View(context) {
                 }
                 if (activeIsErasing) {
                     eraseAtCurrentPoints()
+                } else if (!straightLineMode && !activeIsScribbling && activeTimedPoints.size >= 10) {
+                    if (ScribbleEraserDetector.isScribble(activeTimedPoints)) {
+                        activeIsScribbling = true
+                    }
                 }
                 invalidate()
                 return true
@@ -284,6 +359,7 @@ class StylusCanvasView(context: Context) : View(context) {
                     secondaryButtonHandled = false
                     activePoints.clear()
                     activeTimedPoints.clear()
+                    activeIsScribbling = false
                     parent?.requestDisallowInterceptTouchEvent(false)
                     return true
                 }
@@ -295,7 +371,7 @@ class StylusCanvasView(context: Context) : View(context) {
                 if (activeIsErasing) {
                     eraseAtCurrentPoints()
                 } else if (activePoints.isNotEmpty()) {
-                    if (!straightLineMode && ScribbleEraserDetector.isScribble(activeTimedPoints)) {
+                    if (!straightLineMode && (activeIsScribbling || ScribbleEraserDetector.isScribble(activeTimedPoints))) {
                         val scribbleAction = gestureMappings[GestureTrigger.SCRIBBLE] ?: GestureAction.ERASE
                         if (scribbleAction == GestureAction.ERASE) {
                             eraseByScribbleBox()
@@ -312,6 +388,7 @@ class StylusCanvasView(context: Context) : View(context) {
                 activeTimedPoints.clear()
                 straightStartPoint = null
                 activeIsErasing = false
+                activeIsScribbling = false
                 parent?.requestDisallowInterceptTouchEvent(false)
                 invalidate()
                 return true
@@ -442,16 +519,29 @@ class StylusCanvasView(context: Context) : View(context) {
 
     private fun eraseByScribbleBox() {
         val scribbleBox = ScribbleEraserDetector.boundingBoxNormalized(
-            activePoints.map { it.x to it.y }
+            activePoints.map { it.x to it.y },
+            padding = 0.003f
         )
         onEraseInNormalizedBox?.invoke(scribbleBox[0], scribbleBox[1], scribbleBox[2], scribbleBox[3])
+        val hitDistNorm = 0.017f
+        val scribbleStep = maxOf(1, activePoints.size / 36)
+        val sampledScribble = activePoints.filterIndexed { idx, _ -> idx % scribbleStep == 0 }
+
         val hitIds = cachedCommittedStrokes.filter { stroke ->
-            if (stroke.points.isEmpty()) return@filter false
-            val strokeBox = ScribbleEraserDetector.boundingBoxNormalized(
-                stroke.points.map { it.x to it.y },
-                padding = 0.005f
-            )
-            ScribbleEraserDetector.boxesIntersect(scribbleBox, strokeBox)
+            val pts = stroke.points
+            if (pts.isEmpty()) return@filter false
+            // Require actual points of the stroke to lie inside the scribble box AND near scribble points
+            var closeHits = 0
+            val minRequiredHits = if (pts.size <= 3) 1 else 2
+            for (pt in pts) {
+                if (pt.x in scribbleBox[0]..scribbleBox[2] && pt.y in scribbleBox[1]..scribbleBox[3]) {
+                    if (sampledScribble.any { sp -> hypot(pt.x - sp.x, pt.y - sp.y) <= hitDistNorm }) {
+                        closeHits++
+                        if (closeHits >= minRequiredHits) return@filter true
+                    }
+                }
+            }
+            false
         }.map { it.id }
 
         if (hitIds.isNotEmpty()) {
@@ -479,7 +569,7 @@ class StylusCanvasView(context: Context) : View(context) {
         }
 
         if (activePoints.isNotEmpty()) {
-            if (activeIsErasing) {
+            if (activeIsErasing || activeIsScribbling) {
                 drawGuidePath(canvas, activePoints, w, h)
             } else {
                 StrokeRenderer.drawSingleStroke(

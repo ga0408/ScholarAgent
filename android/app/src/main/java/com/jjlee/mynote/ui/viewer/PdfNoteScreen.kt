@@ -167,17 +167,39 @@ fun PdfNoteScreen(
     var renderWidthPx by remember { mutableIntStateOf(2190) } // Lenovo 13" portrait native width
 
     var brushState by remember { mutableStateOf(folderSettings.lastBrush) }
+    var previousBrushState by remember { mutableStateOf(folderSettings.lastBrush) }
+    var lastNonEraserBrush by remember {
+        mutableStateOf(
+            if (folderSettings.lastBrush.type != BrushType.ERASER) folderSettings.lastBrush
+            else BrushState()
+        )
+    }
+    var activeBrushTrack by remember { mutableStateOf(folderSettings.lastBrush) }
     var brushLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        brushState = settingsDataStore.folderSettings.first().lastBrush
+        val saved = settingsDataStore.folderSettings.first().lastBrush
+        brushState = saved
+        activeBrushTrack = saved
+        if (saved.type != BrushType.ERASER) {
+            lastNonEraserBrush = saved
+        }
         brushLoaded = true
     }
     LaunchedEffect(brushState, brushLoaded) {
+        if (brushState != activeBrushTrack) {
+            previousBrushState = activeBrushTrack
+            activeBrushTrack = brushState
+            if (brushState.type != BrushType.ERASER) {
+                lastNonEraserBrush = brushState
+            }
+        }
         if (brushLoaded) {
             delay(250L)
             settingsDataStore.saveLastBrush(brushState)
         }
     }
+    var showHandwritingKeyboardDialog by remember { mutableStateOf(false) }
+    var handwritingInputText by remember { mutableStateOf("") }
     var strokesVisible by remember(document.id, initialShowStrokes) {
         mutableStateOf(initialShowStrokes)
     }
@@ -458,6 +480,40 @@ fun PdfNoteScreen(
 
     fun executeGestureAction(action: GestureAction) {
         when (action) {
+            GestureAction.SWAP_PEN_ERASER -> {
+                if (brushState.type == BrushType.ERASER) {
+                    brushState = lastNonEraserBrush
+                    Toast.makeText(context, "펜 전환", Toast.LENGTH_SHORT).show()
+                } else {
+                    lastNonEraserBrush = brushState
+                    brushState = brushState.copy(type = BrushType.ERASER)
+                    Toast.makeText(context, "지우개 전환", Toast.LENGTH_SHORT).show()
+                }
+                gestureOnlyMode = false
+            }
+            GestureAction.PREVIOUS_TOOL -> {
+                val target = if (previousBrushState != brushState) previousBrushState else lastNonEraserBrush
+                brushState = target
+                gestureOnlyMode = false
+                Toast.makeText(context, "이전 도구 전환", Toast.LENGTH_SHORT).show()
+            }
+            GestureAction.CYCLE_PEN_SLOT -> {
+                val slots = folderSettings.favoritePens
+                if (slots.isNotEmpty()) {
+                    val curIdx = slots.indexOfFirst {
+                        it.brushType == brushState.type &&
+                            it.colorArgb == brushState.colorArgb &&
+                            kotlin.math.abs(it.widthDp - brushState.widthDp) < 0.2f
+                    }
+                    val nextPreset = slots[(curIdx + 1) % slots.size]
+                    brushState = nextPreset.toBrushState()
+                    gestureOnlyMode = false
+                    Toast.makeText(context, nextPreset.label, Toast.LENGTH_SHORT).show()
+                }
+            }
+            GestureAction.HANDWRITING_KEYBOARD -> {
+                showHandwritingKeyboardDialog = true
+            }
             GestureAction.UNDO -> performUndo()
             GestureAction.REDO -> performRedo()
             GestureAction.OPEN_MEMO -> openMemoPopup(toggleIfVisible = false)
@@ -817,7 +873,9 @@ fun PdfNoteScreen(
                                 val boxR = rightN * pageSizePt.first
                                 val boxB = bottomN * pageSizePt.second
                                 eraseAiHighlightsMatching { r ->
-                                    boxL <= r[2] && boxR >= r[0] && boxT <= r[3] && boxB >= r[1]
+                                    val midY = (r[1] + r[3]) / 2f
+                                    val overlapX = minOf(boxR, r[2]) - maxOf(boxL, r[0])
+                                    midY in boxT..boxB && overlapX > 6f
                                 }
                             }
                         }
@@ -1088,7 +1146,12 @@ fun PdfNoteScreen(
                     FilterChip(
                         selected = !gestureOnlyMode && brushState.type == BrushType.ERASER,
                         onClick = {
-                            brushState = brushState.copy(type = BrushType.ERASER)
+                            if (brushState.type == BrushType.ERASER) {
+                                brushState = lastNonEraserBrush
+                            } else {
+                                lastNonEraserBrush = brushState
+                                brushState = brushState.copy(type = BrushType.ERASER)
+                            }
                             gestureOnlyMode = false
                         },
                         label = { Text("지우개") },
@@ -1456,6 +1519,53 @@ fun PdfNoteScreen(
                     }
                 },
                 onDismiss = { showGestureConfigDialog = false }
+            )
+        }
+
+        // 8. Handwriting-to-Text (Stylus Keyboard) Input Dialog
+        if (showHandwritingKeyboardDialog) {
+            AlertDialog(
+                onDismissRequest = { showHandwritingKeyboardDialog = false },
+                title = { Text("필기 키보드 변환 입력") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "아래 입력창에 레노버 펜으로 바로 글씨를 쓰면 텍스트로 변환됩니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64748B)
+                        )
+                        androidx.compose.material3.OutlinedTextField(
+                            value = handwritingInputText,
+                            onValueChange = { handwritingInputText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp),
+                            placeholder = { Text("펜으로 여기에 필기하거나 키보드로 입력하세요...") }
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (handwritingInputText.isNotBlank()) {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                    as? android.content.ClipboardManager
+                                clipboard?.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("ScholarNote", handwritingInputText)
+                                )
+                                Toast.makeText(context, "변환된 텍스트가 클립보드에 복사되었습니다.", Toast.LENGTH_SHORT).show()
+                            }
+                            showHandwritingKeyboardDialog = false
+                        }
+                    ) {
+                        Text("복사 후 닫기")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showHandwritingKeyboardDialog = false }) {
+                        Text("닫기")
+                    }
+                }
             )
         }
     }

@@ -1,6 +1,7 @@
 package com.jjlee.mynote.ink
 
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -12,15 +13,16 @@ data class TimedPoint(
 
 /**
  * Detects scribble-to-erase gestures: rapid back-and-forth direction reversals
- * confined to a compact bounding box.
+ * using extremum-anchor leg detection (immune to 240Hz/360Hz micro-deltas).
  */
 object ScribbleEraserDetector {
 
     fun isScribble(
         points: List<TimedPoint>,
         minReversals: Int = 3,
-        maxDurationMs: Long = 1600L,
-        maxAspectCompactnessPx: Float = 420f
+        maxDurationMs: Long = 3500L,
+        maxAspectCompactnessPx: Float = 1600f,
+        minLegPx: Float = 14f
     ): Boolean {
         if (points.size < 6) return false
         val duration = points.last().timestampMs - points.first().timestampMs
@@ -30,39 +32,57 @@ object ScribbleEraserDetector {
         var maxX = -Float.MAX_VALUE
         var minY = Float.MAX_VALUE
         var maxY = -Float.MAX_VALUE
-        for (pt in points) {
+        var pathLen = 0f
+
+        for (i in points.indices) {
+            val pt = points[i]
             minX = min(minX, pt.x)
             maxX = max(maxX, pt.x)
             minY = min(minY, pt.y)
             maxY = max(maxY, pt.y)
+            if (i > 0) {
+                pathLen += hypot(pt.x - points[i - 1].x, pt.y - points[i - 1].y)
+            }
         }
         val boxWidth = maxX - minX
         val boxHeight = maxY - minY
-        if (boxWidth < 12f && boxHeight < 12f) return false
+        val diagonal = hypot(boxWidth, boxHeight)
+        if (diagonal < 18f) return false
         if (boxWidth > maxAspectCompactnessPx && boxHeight > maxAspectCompactnessPx) return false
+        // A true back-and-forth scribble folds over its bounding box diagonal at least ~1.9x
+        if (pathLen / diagonal < 1.85f) return false
 
         var xReversals = 0
         var yReversals = 0
         var prevDxSign = 0
         var prevDySign = 0
+        var anchorX = points.first().x
+        var anchorY = points.first().y
 
         for (i in 1 until points.size) {
-            val dx = points[i].x - points[i - 1].x
-            val dy = points[i].y - points[i - 1].y
-
-            if (abs(dx) > 4f) {
+            val pt = points[i]
+            val dx = pt.x - anchorX
+            if (abs(dx) >= minLegPx) {
                 val sign = if (dx > 0f) 1 else -1
                 if (prevDxSign != 0 && sign != prevDxSign) {
                     xReversals++
                 }
                 prevDxSign = sign
+                anchorX = pt.x
+            } else if ((prevDxSign > 0 && pt.x > anchorX) || (prevDxSign < 0 && pt.x < anchorX)) {
+                anchorX = pt.x
             }
-            if (abs(dy) > 4f) {
+
+            val dy = pt.y - anchorY
+            if (abs(dy) >= minLegPx) {
                 val sign = if (dy > 0f) 1 else -1
                 if (prevDySign != 0 && sign != prevDySign) {
                     yReversals++
                 }
                 prevDySign = sign
+                anchorY = pt.y
+            } else if ((prevDySign > 0 && pt.y > anchorY) || (prevDySign < 0 && pt.y < anchorY)) {
+                anchorY = pt.y
             }
         }
 
@@ -71,7 +91,7 @@ object ScribbleEraserDetector {
 
     fun boundingBoxNormalized(
         points: List<Pair<Float, Float>>,
-        padding: Float = 0.015f
+        padding: Float = 0.003f
     ): FloatArray {
         var minX = 1f
         var maxX = 0f
