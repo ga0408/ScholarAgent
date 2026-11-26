@@ -2,8 +2,8 @@ package com.jjlee.mynote.ink
 
 import kotlin.math.abs
 import kotlin.math.hypot
-import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.max
 
 data class TimedPoint(
     val x: Float,
@@ -12,27 +12,32 @@ data class TimedPoint(
 )
 
 /**
- * Detects scribble-to-erase gestures: rapid back-and-forth direction reversals
- * using extremum-anchor leg detection (immune to 240Hz/360Hz micro-deltas).
+ * Detects deliberate scribble-to-erase gestures:
+ * - Requires at least 5 primary-axis direction reversals (3+ full back-and-forth sweeps)
+ * - Requires primary-axis folded travel ratio >= 3.1x (excludes left-to-right cursive writing)
+ * - Requires minimum total path length >= 220px and leg amplitude >= 26px
  */
 object ScribbleEraserDetector {
 
     fun isScribble(
         points: List<TimedPoint>,
-        minReversals: Int = 3,
-        maxDurationMs: Long = 3500L,
+        minReversals: Int = 5,
+        maxDurationMs: Long = 4000L,
         maxAspectCompactnessPx: Float = 1600f,
-        minLegPx: Float = 14f
+        minLegPx: Float = 26f,
+        minTotalPathPx: Float = 220f
     ): Boolean {
-        if (points.size < 6) return false
+        if (points.size < 12) return false
         val duration = points.last().timestampMs - points.first().timestampMs
-        if (duration <= 0L || duration > maxDurationMs) return false
+        if (duration <= 80L || duration > maxDurationMs) return false
 
         var minX = Float.MAX_VALUE
         var maxX = -Float.MAX_VALUE
         var minY = Float.MAX_VALUE
         var maxY = -Float.MAX_VALUE
         var pathLen = 0f
+        var xPathLen = 0f
+        var yPathLen = 0f
 
         for (i in points.indices) {
             val pt = points[i]
@@ -41,16 +46,20 @@ object ScribbleEraserDetector {
             minY = min(minY, pt.y)
             maxY = max(maxY, pt.y)
             if (i > 0) {
-                pathLen += hypot(pt.x - points[i - 1].x, pt.y - points[i - 1].y)
+                val segDx = abs(pt.x - points[i - 1].x)
+                val segDy = abs(pt.y - points[i - 1].y)
+                xPathLen += segDx
+                yPathLen += segDy
+                pathLen += hypot(segDx, segDy)
             }
         }
+        if (pathLen < minTotalPathPx) return false
+
         val boxWidth = maxX - minX
         val boxHeight = maxY - minY
         val diagonal = hypot(boxWidth, boxHeight)
-        if (diagonal < 18f) return false
+        if (diagonal < 28f) return false
         if (boxWidth > maxAspectCompactnessPx && boxHeight > maxAspectCompactnessPx) return false
-        // A true back-and-forth scribble folds over its bounding box diagonal at least ~1.9x
-        if (pathLen / diagonal < 1.85f) return false
 
         var xReversals = 0
         var yReversals = 0
@@ -86,7 +95,17 @@ object ScribbleEraserDetector {
             }
         }
 
-        return max(xReversals, yReversals) >= minReversals
+        // Connected horizontal cursive writing has wide boxWidth, small y-wiggles, and low xPathLen/boxWidth.
+        // Require the dominant axis (or horizontal axis) to fold back-and-forth >= 3.0x with >= 5 reversals.
+        val horizScribble = boxWidth >= 24f &&
+            xReversals >= minReversals &&
+            (xPathLen / boxWidth.coerceAtLeast(1f)) >= 3.0f
+        val vertScribble = boxHeight >= 32f &&
+            boxHeight >= boxWidth * 0.75f &&
+            yReversals >= minReversals &&
+            (yPathLen / boxHeight.coerceAtLeast(1f)) >= 3.0f
+
+        return horizScribble || vertScribble
     }
 
     fun boundingBoxNormalized(

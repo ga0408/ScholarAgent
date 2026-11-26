@@ -153,6 +153,7 @@ fun PdfNoteScreen(
     settingsDataStore: SettingsDataStore,
     driveApiService: DriveApiService,
     initialShowStrokes: Boolean = true,
+    stylusButtonEventSeq: Int = 0,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -535,6 +536,16 @@ fun PdfNoteScreen(
                 gestureOnlyMode = false
             }
             GestureAction.ERASE, GestureAction.NONE -> Unit
+        }
+    }
+
+    var observedStylusSeq by remember { mutableIntStateOf(stylusButtonEventSeq) }
+    LaunchedEffect(stylusButtonEventSeq) {
+        if (stylusButtonEventSeq != observedStylusSeq) {
+            observedStylusSeq = stylusButtonEventSeq
+            val action = folderSettings.gestureMappings[GestureTrigger.PEN_DOUBLE_TAP]
+                ?: GestureAction.SWAP_PEN_ERASER
+            executeGestureAction(action)
         }
     }
 
@@ -931,6 +942,10 @@ fun PdfNoteScreen(
                                     this.onEraseIdsRequested = handleEraseIdsRequested
                                     this.onEraseAtNormalizedPoint = eraseAiHighlightAt
                                     this.onEraseInNormalizedBox = eraseAiHighlightsInBox
+                                    this.onUndoLastTapDot = {
+                                        performUndo()
+                                        redoStack.removeLastOrNull()
+                                    }
                                     this.onGestureTriggered = { trigger ->
                                         val action = folderSettings.gestureMappings[trigger]
                                         if (action != null) {
@@ -949,6 +964,10 @@ fun PdfNoteScreen(
                                 view.onEraseIdsRequested = handleEraseIdsRequested
                                 view.onEraseAtNormalizedPoint = eraseAiHighlightAt
                                 view.onEraseInNormalizedBox = eraseAiHighlightsInBox
+                                view.onUndoLastTapDot = {
+                                    performUndo()
+                                    redoStack.removeLastOrNull()
+                                }
                                 view.onGestureTriggered = { trigger ->
                                     val action = folderSettings.gestureMappings[trigger]
                                     if (action != null) {

@@ -32,6 +32,7 @@ class StylusCanvasView(context: Context) : View(context) {
     var onEraseAtNormalizedPoint: ((Float, Float) -> Unit)? = null
     var onEraseInNormalizedBox: ((Float, Float, Float, Float) -> Unit)? = null
     var onGestureTriggered: ((GestureTrigger) -> Unit)? = null
+    var onUndoLastTapDot: (() -> Unit)? = null
     var onTwoFingerTapUndo: (() -> Unit)? = null
     var onThreeFingerTapRedo: (() -> Unit)? = null
 
@@ -62,6 +63,9 @@ class StylusCanvasView(context: Context) : View(context) {
     private var lastHoverButtonState = 0
     private var lastBarrelPressTimeMs = 0L
     private var hoverPrimaryPressDownMs = 0L
+    private var lastStylusTapTimeMs = 0L
+    private var lastStylusTapX = 0f
+    private var lastStylusTapY = 0f
 
     // Multi-touch tap & swipe tracking
     private var maxPointerCountInGesture = 0
@@ -372,6 +376,7 @@ class StylusCanvasView(context: Context) : View(context) {
                     eraseAtCurrentPoints()
                 } else if (activePoints.isNotEmpty()) {
                     if (!straightLineMode && (activeIsScribbling || ScribbleEraserDetector.isScribble(activeTimedPoints))) {
+                        lastStylusTapTimeMs = 0L
                         val scribbleAction = gestureMappings[GestureTrigger.SCRIBBLE] ?: GestureAction.ERASE
                         if (scribbleAction == GestureAction.ERASE) {
                             eraseByScribbleBox()
@@ -379,9 +384,28 @@ class StylusCanvasView(context: Context) : View(context) {
                             onGestureTriggered?.invoke(GestureTrigger.SCRIBBLE)
                         }
                     } else {
-                        val ptsSnapshot = activePoints.toList()
-                        pendingStrokes.add(PendingStroke(brushState, ptsSnapshot))
-                        onStrokeCompleted?.invoke(brushState, ptsSnapshot)
+                        val isQuickTap = !straightLineMode && isTinyStylusTap(activeTimedPoints)
+                        val now = System.currentTimeMillis()
+                        if (isQuickTap &&
+                            now - lastStylusTapTimeMs in 50L..360L &&
+                            hypot(event.x - lastStylusTapX, event.y - lastStylusTapY) < 28f * density
+                        ) {
+                            lastStylusTapTimeMs = 0L
+                            pendingStrokes.removeLastOrNull()
+                            onUndoLastTapDot?.invoke()
+                            onGestureTriggered?.invoke(GestureTrigger.PEN_DOUBLE_TAP)
+                        } else {
+                            if (isQuickTap) {
+                                lastStylusTapTimeMs = now
+                                lastStylusTapX = event.x
+                                lastStylusTapY = event.y
+                            } else {
+                                lastStylusTapTimeMs = 0L
+                            }
+                            val ptsSnapshot = activePoints.toList()
+                            pendingStrokes.add(PendingStroke(brushState, ptsSnapshot))
+                            onStrokeCompleted?.invoke(brushState, ptsSnapshot)
+                        }
                     }
                 }
                 activePoints.clear()
@@ -395,6 +419,15 @@ class StylusCanvasView(context: Context) : View(context) {
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun isTinyStylusTap(pts: List<TimedPoint>): Boolean {
+        if (pts.isEmpty()) return false
+        val duration = pts.last().timestampMs - pts.first().timestampMs
+        if (duration > 175L) return false
+        val start = pts.first()
+        val maxDist = pts.maxOf { hypot(it.x - start.x, it.y - start.y) }
+        return maxDist < 10f * density
     }
 
     private fun handleFingerGesture(event: MotionEvent) {
