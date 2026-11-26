@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["name", "task_type", "description", "metrics"],
+  "properties": {
+    "name": { "type": "string" },
+    "task_type": { "type": "string" },
+    "description": { "type": "string" },
+    "metrics": { "type": "string" }
+  }
+}

@@ -1,21 +1,26 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["experiment_setup", "figures_and_tables", "key_metrics_verified"],
+  "required": ["experiment_setup", "figures_and_tables", "ablation_findings", "key_metrics_verified"],
   "properties": {
     "experiment_setup": { "type": "string" },
     "figures_and_tables": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["ref", "page", "takeaway", "verified_numbers"],
+        "required": ["ref", "page", "is_plot_approx", "takeaway", "verified_numbers"],
         "properties": {
           "ref": { "type": "string" },
           "page": { "type": "integer" },
+          "is_plot_approx": { "type": "boolean" },
           "takeaway": { "type": "string" },
           "verified_numbers": { "type": "array", "items": { "type": "string" } }
         }
       }
+    },
+    "ablation_findings": {
+      "type": "array",
+      "items": { "type": "string" }
     },
     "key_metrics_verified": { "type": "string" }
   }

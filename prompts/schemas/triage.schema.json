@@ -1,15 +1,17 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["tldr", "overview", "domain_tags", "needs_intro_peek", "needs_method_peek", "key_pages"],
+  "required": ["tldr", "overview", "core_problem", "core_mechanism", "headline_result", "domain_tags", "key_pages"],
   "properties": {
     "tldr": { "type": "string" },
     "overview": { "type": "string" },
+    "core_problem": { "type": "string" },
+    "core_mechanism": { "type": "string" },
+    "headline_result": { "type": "string" },
     "domain_tags": { "type": "array", "items": { "type": "string" } },
-    "needs_intro_peek": { "type": "boolean" },
-    "needs_method_peek": { "type": "boolean" },
     "key_pages": {
       "type": "object",
+      "required": ["intro_pages", "related_work_pages", "method_pages", "experiment_pages", "conclusion_pages"],
       "properties": {
         "intro_pages": { "type": "array", "items": { "type": "integer" } },
         "related_work_pages": { "type": "array", "items": { "type": "integer" } },

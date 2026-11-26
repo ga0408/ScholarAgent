@@ -54,7 +54,7 @@ scholar-agent fetch-daily --limit 10
 ```bash
 scholar-agent sync-drive --arxiv 2410.10450
 ```
-업로드되면 Drive에 `ScholarAgent/01_Papers/YYYY/MM/DD/{paper_id}/` 폴더가 자동 생성됩니다.
+업로드되면 Drive에 `ScholarAgent/papers/{논문 제목}/` (또는 데일리 모드의 경우 `ScholarAgent/daily/YYYY-MM-DD/{논문 제목}/`) 폴더가 자동 생성됩니다.
 
 ### 3단계: 태블릿(`ScholarNote`)용 Android OAuth 설정
 1. 같은 Google Cloud 프로젝트에서 **OAuth 클라이언트 ID → Android**를 추가합니다.

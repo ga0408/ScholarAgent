@@ -1,7 +1,7 @@
 ---
 name: paper-highlight
-description: Select verbatim quotes and block_ids from segments.json for deterministic PDF highlighting.
+description: Select 20-28 verbatim quotes distributed across all paper sections with Korean academic commentary for deterministic PDF highlighting.
 ---
 # Paper Highlight Selector Skill
-- Choose 10-18 high-value sentences across `background`, `contribution`, `method`, `experiment`, `limitation`.
-- Return the **exact verbatim substring** from `segments.json` along with its `block_id` and `page`. Never paraphrase quotes.
+- Enforce section quotas (`background`: 3-5, `contribution`: 3-4, `method`: 6-8, `experiment`: 5-7, `limitation`: 3-4) with at most 2 quotes from the Abstract.
+- Return exact verbatim substrings from `[block_id]` blocks and a 1-sentence Korean `reason` (`prompts/templates/highlights.md`).

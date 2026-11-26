@@ -1,7 +1,7 @@
 ---
 name: paper-figure-table
-description: Analyze figures, charts, and benchmark tables from page PNGs and extracted text to verify experimental numbers and takeaways.
+description: Analyze benchmark tables, plots, and ablation studies from rendered page PNGs and text to verify exact metrics and approximate plot readings.
 ---
 # Paper Figure & Table Analyzer Skill
-- Inspect rendered page PNGs for tables, plots, and architecture diagrams.
-- Verify exact metric values and baselines; never guess unreadable numbers.
+- Read exact cell numbers from tables (`is_plot_approx=false`) and prefix visual plot-only readings with `~` (`is_plot_approx=true`).
+- Include ablation studies (`ablation_findings`) and regimes where the proposed method underperforms baselines (`prompts/templates/figures_tables.md`).

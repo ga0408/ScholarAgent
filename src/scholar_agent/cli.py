@@ -23,10 +23,19 @@ def run_cmd(
     arxiv: str = typer.Option(..., "--arxiv", help="arXiv ID or URL (e.g. 2410.10450)"),
     out_dir: Optional[Path] = typer.Option(None, "--out-dir", help="Custom output directory"),
     force: bool = typer.Option(False, "--force", help="Re-run cached stages"),
+    include_en: bool = typer.Option(False, "--include-en", help="Also generate English report (summary.en.md)"),
+    fast: bool = typer.Option(False, "--fast", help="Skip default multimodal/critical deep-dive stages unless flagged"),
     upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload outputs to Google Drive"),
+    json_out: bool = typer.Option(True, "--json/--no-json", help="Emit structured JSON output"),
 ) -> None:
     """Run the full summary + highlight PDF pipeline for a single arXiv paper."""
-    result = run_paper_pipeline(arxiv, out_base_dir=out_dir, force=force)
+    result = run_paper_pipeline(
+        arxiv,
+        out_base_dir=out_dir,
+        force=force,
+        include_en=include_en,
+        fast_mode=fast,
+    )
     if upload_drive:
         paper_dir = Path(result["work_dir"])
         meta = json.loads((paper_dir / "metadata.json").read_text(encoding="utf-8"))
@@ -39,16 +48,24 @@ def run_cmd(
             mode="paper",
             store=store,
         )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if json_out:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(f"[{result['paper_id']}] {result['title']}\nTL;DR: {result['tldr']}\nSummary: {result['artifacts']['summary_ko']}")
 
 
 @app.command("fetch-daily")
 def fetch_daily_cmd(
     limit: int = typer.Option(10, "--limit", help="Max number of HF Daily Papers to list"),
+    json_out: bool = typer.Option(True, "--json/--no-json", help="Emit structured JSON output"),
 ) -> None:
     """Fetch today's Hugging Face Daily Papers list as JSON."""
     papers = fetch_hf_daily_papers(limit=limit)
-    typer.echo(json.dumps(papers, ensure_ascii=False, indent=2))
+    if json_out:
+        typer.echo(json.dumps(papers, ensure_ascii=False, indent=2))
+    else:
+        for idx, p in enumerate(papers, 1):
+            typer.echo(f"{idx}. [{p['canonical_id']}] {p['title']} (upvotes={p.get('upvotes', 0)})")
 
 
 @app.command("auth-drive")
@@ -97,15 +114,19 @@ def daily_prepare_cmd(
     date: str = typer.Option("", "--date", help="Optional YYYY-MM-DD date override"),
     upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload triage.json & triage.md to Drive"),
     force: bool = typer.Option(False, "--force", help="Re-run triage even if already cached for today"),
+    json_out: bool = typer.Option(True, "--json/--no-json", help="Emit structured JSON output"),
 ) -> None:
-    """Fetch HF Daily Papers, deduplicate, and run fast Abstract triage (pre-summary)."""
+    """Fetch HF Daily Papers, deduplicate, and run structured Abstract triage."""
     result = prepare_daily_triage(
         limit=limit,
         date_str=date,
         upload_drive=upload_drive,
         force=force,
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if json_out:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(Path(result["triage_md"]).read_text(encoding="utf-8"))
 
 
 @app.command("daily-select")
@@ -115,6 +136,7 @@ def daily_select_cmd(
     date: str = typer.Option("", "--date", help="Optional YYYY-MM-DD date override"),
     run_summary: bool = typer.Option(False, "--run-summary", help="Immediately run full summary + highlight on selected papers"),
     upload_drive: bool = typer.Option(False, "--upload-drive", help="Upload processed papers under daily/YYYY-MM-DD/"),
+    json_out: bool = typer.Option(True, "--json/--no-json", help="Emit structured JSON output"),
 ) -> None:
     """Select papers from daily triage and optionally run full summary + highlight."""
     result = select_and_run_daily(
@@ -124,7 +146,10 @@ def daily_select_cmd(
         run_summary=run_summary,
         upload_drive=upload_drive,
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if json_out:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(f"Selected {len(result['selected_arxiv_ids'])} papers ({result['status']}).")
 
 
 if __name__ == "__main__":
