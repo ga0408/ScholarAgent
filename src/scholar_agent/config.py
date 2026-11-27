@@ -17,18 +17,30 @@ class RoleConfig(BaseModel):
     primary: str = "antigravity"
     fallback: str | None = "claude"
     model: str = ""
+    fallback_model: str = ""
     effort: str = "medium"
 
 
 class AgentsDefaults(BaseModel):
     primary_runtime: str = "antigravity"
     fallback_runtime: str = "claude"
-    max_concurrent_runs: int = 3
-    timeout_seconds: int = 300
+    timeout_seconds: int = 360
+
+
+class UserProfileConfig(BaseModel):
+    research_interests: list[str] = Field(
+        default_factory=lambda: [
+            "LLM Efficiency, Long-Context & KV Cache Compression",
+            "External Knowledge Injection, RAG & Agent Memory Systems",
+            "Multimodal Reasoning & Research Automation Agents",
+        ]
+    )
+    preferred_language: str = "ko"
 
 
 class AgentsConfig(BaseModel):
     defaults: AgentsDefaults = Field(default_factory=AgentsDefaults)
+    user_profile: UserProfileConfig = Field(default_factory=UserProfileConfig)
     roles: dict[str, RoleConfig] = Field(default_factory=dict)
 
     def for_role(self, role: str) -> RoleConfig:

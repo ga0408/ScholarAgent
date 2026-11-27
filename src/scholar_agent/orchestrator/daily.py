@@ -1,8 +1,9 @@
-"""Daily HF Papers collection & abstract triage pipeline (up to user selection)."""
+"""Daily HF Papers collection & structured hype-filtered abstract triage pipeline."""
 
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,24 +13,55 @@ from scholar_agent.collector.arxiv import fetch_hf_daily_papers, normalize_arxiv
 from scholar_agent.config import get_project_root, load_agents_config
 from scholar_agent.database.sqlite_store import SQLiteStore
 from scholar_agent.orchestrator.pipeline import run_paper_pipeline
+from scholar_agent.prompts import render_prompt
 from scholar_agent.storage.google_drive import GoogleDriveStorage
+
+_TRIAGE_FIELDS = (
+    "problem_ko",
+    "method_ko",
+    "result_ko",
+    "caveat_ko",
+    "summary_ko",
+    "why_read",
+    "relevance_score",
+    "tags",
+)
 
 
 def _render_triage_markdown(date_str: str, items: list[dict[str, Any]]) -> str:
     lines = [
         f"# Hugging Face Daily Papers — {date_str}",
         "",
-        f"총 **{len(items)}편** 수집 완료. 심층 요약할 논문을 선택해 주세요 (`scholar-agent daily-select --index ...`).",
+        f"총 **{len(items)}편** 수집 완료. 심층 요약할 논문을 선택해 주세요 (`scholar-agent daily-select --index ... --run-summary`).",
         "",
     ]
     for idx, it in enumerate(items, start=1):
         tags = ", ".join(it.get("tags", []))
+        rel = int(it.get("relevance_score") or 3)
+        stars = "★" * max(1, min(5, rel)) + "☆" * (5 - max(1, min(5, rel)))
         status_badge = " *(이미 처리됨)*" if it.get("already_processed") else ""
+        repo = it.get("github_repo", "")
+        repo_str = f" | **Code**: {repo}" if repo else ""
+
         lines.extend(
             [
                 f"## {idx}. {it['title']}{status_badge}",
-                f"- **arXiv**: `{it['canonical_id']}` | **Upvotes**: {it.get('upvotes', 0)} | **Tags**: {tags}",
-                f"- **요약**: {it.get('summary_ko', '')}",
+                f"- **arXiv**: `{it['canonical_id']}` | **관심도**: {stars} ({rel}/5) | **Upvotes**: {it.get('upvotes', 0)}{repo_str} | **Tags**: {tags}",
+            ]
+        )
+        if it.get("problem_ko") or it.get("method_ko"):
+            lines.extend(
+                [
+                    f"- **해결 문제**: {it.get('problem_ko', '')}",
+                    f"- **핵심 기법**: {it.get('method_ko', '')}",
+                    f"- **정량 성과**: {it.get('result_ko', '')}",
+                    f"- **전제/유의점**: {it.get('caveat_ko', '')}",
+                ]
+            )
+        else:
+            lines.append(f"- **요약**: {it.get('summary_ko', '')}")
+        lines.extend(
+            [
                 f"- **선정 포인트**: {it.get('why_read', '')}",
                 "",
             ]
@@ -44,7 +76,7 @@ def prepare_daily_triage(
     upload_drive: bool = False,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Fetch HF Daily Papers, deduplicate against SQLite, and run fast abstract triage."""
+    """Fetch HF Daily Papers, deduplicate against SQLite, and run structured abstract triage."""
     root = get_project_root()
     config = load_agents_config()
     store = SQLiteStore(root / "data" / "scholar_agent.db")
@@ -69,7 +101,7 @@ def prepare_daily_triage(
         pid = p["paper_id"]
         existing = store.get_paper(pid)
         already_processed = bool(
-            existing and existing.get("status") in ("completed", "selected", "processing")
+            existing and existing.get("status") in ("completed", "selected")
         )
         if not existing:
             store.upsert_paper(
@@ -77,7 +109,7 @@ def prepare_daily_triage(
                 canonical_id=p["canonical_id"],
                 source="hf_daily",
                 title=p["title"],
-                authors=[],
+                authors=p.get("authors", []),
                 abstract=p["abstract"],
                 pdf_url=p["pdf_url"],
                 status="discovered",
@@ -87,10 +119,10 @@ def prepare_daily_triage(
             **p,
             "already_processed": already_processed,
         }
-        if pid in cached_by_id and not force:
-            entry["summary_ko"] = cached_by_id[pid].get("summary_ko", "")
-            entry["why_read"] = cached_by_id[pid].get("why_read", "")
-            entry["tags"] = cached_by_id[pid].get("tags", [])
+        if pid in cached_by_id and not force and cached_by_id[pid].get("method_ko"):
+            for f in _TRIAGE_FIELDS:
+                if f in cached_by_id[pid]:
+                    entry[f] = cached_by_id[pid][f]
         else:
             to_triage.append(entry)
         enriched.append(entry)
@@ -102,17 +134,17 @@ def prepare_daily_triage(
                 "paper_id": it["paper_id"],
                 "title": it["title"],
                 "abstract": it["abstract"],
+                "github_repo": it.get("github_repo", ""),
+                "ai_keywords": it.get("ai_keywords", []),
             }
             for it in to_triage
         ]
-        prompt = (
-            "You are the Daily Paper Screening Agent.\n"
-            "For each paper below, write:\n"
-            "1. `summary_ko`: 2-3 concise sentences in natural Korean summarizing the abstract "
-            "(keep technical terms like LLM, RAG, LoRA, KV Cache in English).\n"
-            "2. `why_read`: 1 short Korean sentence explaining why a researcher might pick this paper.\n"
-            "3. `tags`: 2-4 concise English domain tags.\n\n"
-            f"Papers JSON:\n{json.dumps(payload_for_llm, ensure_ascii=False, indent=2)}"
+        interests = config.user_profile.research_interests
+        interests_bullets = "\n".join(f"- {item}" for item in interests) or "- General ML & LLM Systems"
+        prompt = render_prompt(
+            "daily_triage",
+            interests_bullet_list=interests_bullets,
+            papers_json=json.dumps(payload_for_llm, ensure_ascii=False, indent=2),
         )
         resp = run_role(
             config,
@@ -127,9 +159,9 @@ def prepare_daily_triage(
         for it in enriched:
             if it["paper_id"] in by_id:
                 res = by_id[it["paper_id"]]
-                it["summary_ko"] = res.get("summary_ko", "")
-                it["why_read"] = res.get("why_read", "")
-                it["tags"] = res.get("tags", [])
+                for f in _TRIAGE_FIELDS:
+                    if f in res:
+                        it[f] = res[f]
                 if not it["already_processed"]:
                     store.update_paper_status(it["paper_id"], "triaged")
 
@@ -175,6 +207,7 @@ def select_and_run_daily(
 ) -> dict[str, Any]:
     """Mark selected papers from daily triage and optionally run full summary + highlight."""
     root = get_project_root()
+    config = load_agents_config()
     store = SQLiteStore(root / "data" / "scholar_agent.db")
     day = date_str[:10] if len(date_str) >= 10 else datetime.now(timezone.utc).strftime("%Y-%m-%d")
     daily_dir = root / "data" / "daily" / day
@@ -212,9 +245,16 @@ def select_and_run_daily(
 
     processed: list[dict[str, Any]] = []
     if run_summary:
+        ordered_results: dict[str, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=len(unique_ids)) as pool:
+            futs = {pool.submit(run_paper_pipeline, aid): aid for aid in unique_ids}
+            for fut in as_completed(futs):
+                aid = futs[fut]
+                ordered_results[aid] = fut.result()
+
         drive = GoogleDriveStorage() if upload_drive else None
         for aid in unique_ids:
-            res = run_paper_pipeline(aid)
+            res = ordered_results[aid]
             if drive is not None:
                 paper_dir = Path(res["work_dir"])
                 meta = json.loads((paper_dir / "metadata.json").read_text(encoding="utf-8"))

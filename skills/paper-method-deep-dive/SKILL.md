@@ -1,8 +1,7 @@
 ---
 name: paper-method-deep-dive
-description: Analyze the paper's core architecture, mechanisms, tensor flow, complexity, and differences from prior art.
+description: Inspect rendered method page PNGs and extracted text to analyze architecture, Mermaid flowchart, tensor flow, Big-O complexity, and differences from prior art.
 ---
 # Paper Method Deep Dive Skill
-- Focus on the proposed method's architecture, data/tensor flow, and algorithmic steps.
-- Explicitly contrast with standard baselines or prior art.
-- Cite exact page numbers (`evidence_pages`) and keep technical terms in English.
+- Produce `architecture_summary`, valid `mermaid_diagram` (`flowchart LR`/`TD`), `core_mechanisms` (`tensor_flow`), `comparison_to_prior_art`, and `complexity_and_cost`.
+- Distinguish paper-stated values from derived parameter/memory estimates, citing exact `evidence_pages` (`prompts/templates/method_deep_dive.md`).

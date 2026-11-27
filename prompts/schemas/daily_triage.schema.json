@@ -7,11 +7,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["paper_id", "summary_ko", "why_read", "tags"],
+        "required": ["paper_id", "problem_ko", "method_ko", "result_ko", "caveat_ko", "summary_ko", "why_read", "relevance_score", "tags"],
         "properties": {
           "paper_id": { "type": "string" },
+          "problem_ko": { "type": "string" },
+          "method_ko": { "type": "string" },
+          "result_ko": { "type": "string" },
+          "caveat_ko": { "type": "string" },
           "summary_ko": { "type": "string" },
           "why_read": { "type": "string" },
+          "relevance_score": { "type": "integer", "minimum": 1, "maximum": 5 },
           "tags": { "type": "array", "items": { "type": "string" } }
         }
       }

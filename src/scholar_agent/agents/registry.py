@@ -1,4 +1,4 @@
-"""Runtime adapter registry and fallback execution."""
+"""Runtime adapter registry and fallback execution (unthrottled parallel execution)."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ def run_role(
 ) -> AgentResponse:
     role_cfg = config.for_role(role)
     primary = get_adapter(role_cfg.primary)
+
     try:
         return primary.run(
             prompt,
@@ -55,7 +56,7 @@ def run_role(
                 work_dir=work_dir,
                 schema_path=schema_path,
                 images=images,
-                model=None,
+                model=role_cfg.fallback_model or None,
                 effort=role_cfg.effort or None,
                 timeout=config.defaults.timeout_seconds,
             )

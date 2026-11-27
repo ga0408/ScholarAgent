@@ -1,11 +1,13 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["limitations", "takeaways", "critical_analysis", "future_directions"],
+  "required": ["strengths", "author_stated_limitations", "methodological_and_eval_gaps", "cost_and_scaling_reality", "practical_takeaways", "future_directions"],
   "properties": {
-    "limitations": { "type": "array", "items": { "type": "string" } },
-    "takeaways": { "type": "array", "items": { "type": "string" } },
-    "critical_analysis": { "type": "string" },
+    "strengths": { "type": "array", "items": { "type": "string" } },
+    "author_stated_limitations": { "type": "array", "items": { "type": "string" } },
+    "methodological_and_eval_gaps": { "type": "array", "items": { "type": "string" } },
+    "cost_and_scaling_reality": { "type": "string" },
+    "practical_takeaways": { "type": "array", "items": { "type": "string" } },
     "future_directions": { "type": "array", "items": { "type": "string" } }
   }
 }

@@ -147,9 +147,15 @@ class SQLiteStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(paper_id) DO UPDATE SET
                     title = excluded.title,
-                    authors_json = excluded.authors_json,
-                    abstract = excluded.abstract,
+                    authors_json = CASE
+                        WHEN excluded.authors_json != '[]' THEN excluded.authors_json
+                        ELSE papers.authors_json
+                    END,
+                    abstract = COALESCE(NULLIF(excluded.abstract, ''), papers.abstract),
+                    published_at = COALESCE(NULLIF(excluded.published_at, ''), papers.published_at),
+                    pdf_url = COALESCE(NULLIF(excluded.pdf_url, ''), papers.pdf_url),
                     content_sha256 = COALESCE(NULLIF(excluded.content_sha256, ''), papers.content_sha256),
+                    status = excluded.status,
                     work_dir = COALESCE(NULLIF(excluded.work_dir, ''), papers.work_dir),
                     updated_at = excluded.updated_at
                 """,

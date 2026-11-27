@@ -16,28 +16,7 @@ from scholar_agent.collector.arxiv import (
 )
 from scholar_agent.config import AgentsConfig, get_project_root, load_agents_config
 from scholar_agent.database.sqlite_store import SQLiteStore
-
-_TRIAGE_OUTPUT_SCHEMA = {
-    "type": "object",
-    "required": ["tldr", "core_problem", "core_method", "key_difference"],
-    "properties": {
-        "tldr": {"type": "string"},
-        "core_problem": {"type": "string"},
-        "core_method": {"type": "string"},
-        "key_difference": {"type": "string"},
-    },
-}
-
-_BENCHMARK_OUTPUT_SCHEMA = {
-    "type": "object",
-    "required": ["name", "task_type", "description", "metrics"],
-    "properties": {
-        "name": {"type": "string"},
-        "task_type": {"type": "string"},
-        "description": {"type": "string"},
-        "metrics": {"type": "string"},
-    },
-}
+from scholar_agent.prompts import render_prompt
 
 
 def _normalize_key(text: str) -> str:
@@ -86,7 +65,7 @@ def triage_paper(
             "title": query_or_arxiv_id,
             "abstract": "",
             "triage": {
-                "tldr": f"arXiv에서 '{query_or_arxiv_id}' 초록을 찾지 못했습니다.",
+                "tldr": f"arXiv에서 '{query_or_arxiv_id}'와(과) 제목이 일치하는 논문을 찾지 못했습니다.",
                 "core_problem": "",
                 "core_method": "",
                 "key_difference": "",
@@ -106,16 +85,16 @@ def triage_paper(
         )
         return cached_by_id
 
-    prompt = (
-        "You are a fast Abstract-only Paper Triage Agent.\n"
-        "Keep technical terms in English and write concise explanations in Korean.\n"
-        "Return ONLY valid JSON matching:\n"
-        f"{json.dumps(_TRIAGE_OUTPUT_SCHEMA, ensure_ascii=False)}\n\n"
-        f"Title: {meta.title}\n"
-        f"Abstract: {meta.abstract}\n"
+    prompt = render_prompt(
+        "tool_triage_paper",
+        title=meta.title,
+        abstract=meta.abstract,
     )
-    run_dir = work_dir or get_project_root()
-    resp = run_role(config, "daily_triage", prompt, work_dir=run_dir)
+    schema_path = get_project_root() / "prompts" / "schemas" / "tool_triage_paper.schema.json"
+    run_dir = work_dir or (get_project_root() / "data" / "tool_runs")
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    resp = run_role(config, "daily_triage", prompt, work_dir=run_dir, schema_path=schema_path)
     triage_data = resp.structured_output or _extract_json_obj(resp.raw_text)
 
     for k in (key, arxiv_key):
@@ -152,16 +131,12 @@ def lookup_benchmark(
     if cached is not None:
         return cached
 
-    prompt = (
-        "You are a Research Benchmark Reference Assistant.\n"
-        "Keep technical terms in English and write concise explanations in Korean.\n"
-        "Return ONLY valid JSON matching:\n"
-        f"{json.dumps(_BENCHMARK_OUTPUT_SCHEMA, ensure_ascii=False)}\n\n"
-        f"Benchmark name: {name}\n"
-        "Explain what this benchmark evaluates, its task_type, and primary evaluation metrics."
-    )
-    run_dir = work_dir or get_project_root()
-    resp = run_role(config, "daily_triage", prompt, work_dir=run_dir)
+    prompt = render_prompt("tool_lookup_benchmark", name=name)
+    schema_path = get_project_root() / "prompts" / "schemas" / "tool_lookup_benchmark.schema.json"
+    run_dir = work_dir or (get_project_root() / "data" / "tool_runs")
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    resp = run_role(config, "daily_triage", prompt, work_dir=run_dir, schema_path=schema_path)
     info = resp.structured_output or _extract_json_obj(resp.raw_text)
 
     store.upsert_benchmark_cache(name_key=key, name=name, info=info)

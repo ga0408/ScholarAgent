@@ -9,8 +9,9 @@ from typing import Any
 from scholar_agent.agents.registry import run_role
 from scholar_agent.collector.arxiv import normalize_arxiv_id
 from scholar_agent.config import get_project_root, load_agents_config
-from scholar_agent.orchestrator.pipeline import TERMINOLOGY_RULE, run_paper_pipeline
+from scholar_agent.orchestrator.pipeline import run_paper_pipeline
 from scholar_agent.processors.video_maker import build_presentation_video
+from scholar_agent.prompts import TERMINOLOGY_RULE
 
 
 def generate_presentation_video(

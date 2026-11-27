@@ -35,11 +35,11 @@
         │
         ▼
 [Storage & Sync]
-        └── Google Drive (01_Papers/YYYY/MM/DD/{paper_id}/) ──► MyNote 태블릿 앱 열람
+        └── Google Drive (papers/{Paper Title}/ 또는 daily/YYYY-MM-DD/{Paper Title}/) ──► ScholarNote 태블릿 앱 열람
 ```
 
 ## 2. Main Orchestrator 상위 확장 대비 설계
 - **Process/Daemon 분리**: Core 파이프라인은 `scholar-agent <cmd> --json` 순수 CLI로 실행되며, Telegram Long Polling이나 Cron 데몬은 별도 진입점으로 분리됩니다.
 - **SQLite WAL + Single-Writer 패턴**: `PRAGMA journal_mode=WAL; busy_timeout=5000;`으로 동시 읽기/쓰기 락을 방지합니다.
-- **전역 동시성 제어**: `config/agents.yaml`의 `max_concurrent_runs`를 통해 API Rate Limit(429) 및 CPU/메모리 포화를 방지합니다.
+- **무제한 병렬 DAG 실행**: 인위적인 `max_concurrent_runs` 병목 없이 `Triage` 완료 직후 본문 분석·멀티모달 검증·비평·하이라이트 추출 서브에이전트들이 일제히 동시 실행되어 지연 시간을 최소화합니다.
 - **표준 JSON 계약**: 모든 파이프라인 실행은 `result.json` 및 stdout JSON을 반환합니다.

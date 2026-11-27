@@ -1,8 +1,8 @@
 ---
 name: paper-triage
-description: Screen a research paper from its title, abstract, and table of contents to extract Overview, Background, Problem, Motivation, Contributions, and key page ranges.
+description: Screen a research paper from its title, abstract, introduction opening, and extracted section TOC to produce a grounded Korean TL;DR, overview, and 1-indexed key page map.
 ---
 # Paper Triage Skill
-- Extract high-level context (`overview`, `background`, `problem`, `motivation`, `contributions`).
-- Identify `method_pages` and `experiment_pages` (1-indexed) so downstream multimodal subagents know which page PNGs to inspect.
-- Keep technical terms in English; write explanations in clear academic Korean.
+- Extract `tldr`, `overview`, `core_problem`, `core_mechanism`, `headline_result`, `domain_tags`, and `key_pages`.
+- Map custom Method section headings (between Introduction/Related Work and Experiments) into `method_pages`.
+- Keep technical terms in English; write explanations in clear academic Korean (`prompts/templates/triage.md`).

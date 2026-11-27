@@ -4,30 +4,38 @@
 defaults:
   primary_runtime: antigravity
   fallback_runtime: claude
-  max_concurrent_runs: 3
-  timeout_seconds: 300
+  timeout_seconds: 360
+
+user_profile:
+  preferred_language: ko
+  research_interests:
+    - "LLM Efficiency, Long-Context, Attention & KV Cache Compression"
+    - "External Knowledge Augmentation, RAG & Long-Term Agent Memory"
+    - "Multimodal Document Understanding & Agentic Architectures"
 
 roles:
   # Batch Hugging Face Daily Papers abstract screening & fast tool triage
   daily_triage:
     primary: antigravity
+    fallback: claude
     model: gemini-4-hydrogen-low
     effort: low
 
-  # Single-paper abstract-first triage & section mapping
+  # Single-paper abstract + intro + heading triage & section mapping
   triage:
     primary: antigravity
+    fallback: claude
     model: gemini-4-hydrogen-medium
     effort: medium
 
-  # Core structured section skeleton & escalation flagger
+  # Core structured section skeleton (Intro, Related Works, Overview)
   core_summary:
     primary: antigravity
     fallback: claude
     model: gemini-4-hydrogen-medium
     effort: medium
 
-  # Deep architectural & mathematical analysis
+  # Deep architectural & mathematical analysis (multimodal)
   method_deep_dive:
     primary: antigravity
     fallback: claude
@@ -48,12 +56,12 @@ roles:
     model: gemini-4-hydrogen-medium
     effort: medium
 
-  # Limitations, practical takeaways, follow-up ideas
+  # Limitations, practical takeaways, methodological critique
   critical_review:
     primary: antigravity
     fallback: claude
-    model: gemini-4-hydrogen-medium
-    effort: medium
+    model: gemini-4-hydrogen-high
+    effort: high
 
   # Verbatim quote selection for PDF highlighting
   highlight_selector:
