@@ -98,11 +98,18 @@ internal fun buildMarkdownMathHtml(markdown: String): String {
 
     // 1. Extract fenced code blocks ```lang ... ```
     working = Regex("""```([a-zA-Z0-9_-]*)\n([\s\S]*?)```""").replace(working) { match ->
-        val lang = escapeHtml(match.groupValues[1].trim())
-        val code = escapeHtml(match.groupValues[2].trimEnd('\n'))
+        val rawLang = match.groupValues[1].trim()
+        val rawCode = match.groupValues[2].trimEnd('\n')
         val idx = codeBlocks.size
-        val langBadge = if (lang.isNotEmpty()) "<div class=\"code-lang\">$lang</div>" else ""
-        codeBlocks += "<pre class=\"code-block\">$langBadge<code>$code</code></pre>"
+        if (rawLang.equals("mermaid", ignoreCase = true)) {
+            val fallback = renderMermaidFallbackHtml(rawCode)
+            codeBlocks += "<div class=\"mermaid-box\" data-mermaid=\"${escapeHtml(rawCode)}\">$fallback</div>"
+        } else {
+            val lang = escapeHtml(rawLang)
+            val code = escapeHtml(rawCode)
+            val langBadge = if (lang.isNotEmpty()) "<div class=\"code-lang\">$lang</div>" else ""
+            codeBlocks += "<pre class=\"code-block\">$langBadge<code>$code</code></pre>"
+        }
         "\n\nMNPHCODEBLK${idx}PH\n\n"
     }
 
@@ -368,6 +375,65 @@ internal fun buildMarkdownMathHtml(markdown: String): String {
     overflow-y: hidden;
     padding: 2px 0;
   }
+  .mermaid-box {
+    margin: 12px 0;
+    padding: 12px;
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-radius: 10px;
+    overflow-x: auto;
+  }
+  .mermaid-box svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .mmd-subgraph {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: #FFFFFF;
+    border: 1px solid #93C5FD;
+    border-left: 4px solid #2563EB;
+    border-radius: 8px;
+  }
+  .mmd-sg-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1D4ED8;
+    margin-bottom: 8px;
+  }
+  .mmd-edge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 5px 0;
+    font-size: 12px;
+  }
+  .mmd-node {
+    display: inline-block;
+    padding: 4px 9px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 6px;
+    color: #0F172A;
+    font-weight: 500;
+  }
+  .mmd-arrow {
+    color: #2563EB;
+    font-weight: 700;
+    padding: 0 2px;
+  }
+  .mmd-cond {
+    display: inline-block;
+    padding: 1px 6px;
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    border-radius: 999px;
+    color: #92400E;
+    font-size: 11px;
+  }
 </style>
 </head>
 <body>
@@ -387,11 +453,102 @@ function upgradeWithKatex() {
     } catch (e) {}
   });
 }
+function upgradeWithMermaid() {
+  if (!window.mermaid) return;
+  try {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      flowchart: { htmlLabels: true, curve: 'basis' }
+    });
+  } catch (e) {}
+  var boxes = document.querySelectorAll('.mermaid-box[data-mermaid]');
+  boxes.forEach(function(el, idx) {
+    if (el.getAttribute('data-mmd-done') === '1') return;
+    var src = el.getAttribute('data-mermaid');
+    if (!src) return;
+    try {
+      window.mermaid.render('mmd_svg_' + idx + '_' + Date.now(), src).then(function(res) {
+        if (res && res.svg) {
+          el.innerHTML = res.svg;
+          el.setAttribute('data-mmd-done', '1');
+        }
+      }).catch(function() {});
+    } catch (e) {}
+  });
+}
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous" onload="upgradeWithKatex()"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" crossorigin="anonymous" onload="upgradeWithMermaid()"></script>
 </body>
 </html>
     """.trimIndent()
+}
+
+private fun renderMermaidFallbackHtml(rawMermaid: String): String {
+    val lines = rawMermaid.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("%%") }
+    val nodeLabels = LinkedHashMap<String, String>()
+    val nodeDefRe = Regex("""^([A-Za-z0-9_]+)\s*(?:\["([^"]+)"\]|\[([^\]]+)\]|\("([^"]+)"\)|\(([^)]+)\)|\{([^}]+)\})$""")
+
+    fun parseNodeToken(token: String): String {
+        val t = token.trim()
+        val m = nodeDefRe.matchEntire(t)
+        if (m != null) {
+            val id = m.groupValues[1]
+            val label = (1..5).map { m.groupValues[it + 1] }.firstOrNull { it.isNotEmpty() } ?: id
+            nodeLabels[id] = label
+            return label
+        }
+        return nodeLabels[t] ?: t
+    }
+
+    val sb = StringBuilder()
+    var inSubgraph = false
+    val edgeRe = Regex("""^(.+?)\s*(-+>|==+>|-\.->)\s*(?:\|"([^"]*)"\|\s*|\|([^|]*)\|\s*)?(.+)$""")
+    val sgRe = Regex("""^subgraph\s+(?:[A-Za-z0-9_]+\s*\["?([^"\]]+)"?\]|"?([^"]+)"?)$""", RegexOption.IGNORE_CASE)
+
+    for (line in lines) {
+        if (line.startsWith("flowchart ", ignoreCase = true) || line.startsWith("graph ", ignoreCase = true)) {
+            continue
+        }
+        val sgMatch = sgRe.matchEntire(line)
+        if (sgMatch != null) {
+            if (inSubgraph) sb.append("</div>")
+            val title = sgMatch.groupValues[1].ifEmpty { sgMatch.groupValues[2] }.ifEmpty { "Stage" }
+            sb.append("<div class=\"mmd-subgraph\"><div class=\"mmd-sg-title\">")
+                .append(escapeHtml(title))
+                .append("</div>")
+            inSubgraph = true
+            continue
+        }
+        if (line.equals("end", ignoreCase = true)) {
+            if (inSubgraph) {
+                sb.append("</div>")
+                inSubgraph = false
+            }
+            continue
+        }
+        val edgeMatch = edgeRe.matchEntire(line)
+        if (edgeMatch != null) {
+            val fromLabel = parseNodeToken(edgeMatch.groupValues[1])
+            val arrowType = edgeMatch.groupValues[2]
+            val cond = edgeMatch.groupValues[3].ifEmpty { edgeMatch.groupValues[4] }.trim()
+            val toLabel = parseNodeToken(edgeMatch.groupValues[5])
+            val arrowSym = if (arrowType.contains(".")) "⇢" else "→"
+            sb.append("<div class=\"mmd-edge\">")
+                .append("<span class=\"mmd-node\">").append(escapeHtml(fromLabel)).append("</span>")
+            if (cond.isNotEmpty()) {
+                sb.append("<span class=\"mmd-arrow\">──</span>")
+                    .append("<span class=\"mmd-cond\">").append(escapeHtml(cond)).append("</span>")
+            }
+            sb.append("<span class=\"mmd-arrow\">").append(arrowSym).append("</span>")
+                .append("<span class=\"mmd-node\">").append(escapeHtml(toLabel)).append("</span>")
+                .append("</div>")
+        }
+    }
+    if (inSubgraph) sb.append("</div>")
+    return if (sb.isNotEmpty()) sb.toString() else "<pre class=\"code-block\"><code>${escapeHtml(rawMermaid)}</code></pre>"
 }
 
 private fun renderMarkdownBlocks(text: String): String {
@@ -410,7 +567,7 @@ private fun renderMarkdownBlocks(text: String): String {
 
         // Code block or display math placeholder lines
         if (trimmed.matches(Regex("""^MNPH(CODEBLK|DISPMATH)\d+PH$"""))) {
-            out.append("<p>").append(trimmed).append("</p>\n")
+            out.append(trimmed).append("\n")
             i++
             continue
         }
